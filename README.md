@@ -1,143 +1,264 @@
-# Sinner vs Alcaraz: Social Media Analysis on Bluesky (US Open 2025)
+# Sinner vs Alcaraz: Bluesky Social Media Analysis (US Open 2025)
 
-Web and Social Media Analysis — University of Pavia / University of Milano-Bicocca  
-**Authors:** 
-* Lorenzo Brusati (lorenzo.brusati01@universitadipavia.it)
-* Lorenzo Cinquemani (lorenzo.cinquemani01@universitadipavia.it)
-* Lorenzo Goatelli (lorenzo.goatelli01@universitadipavia.it)
+[![Python](https://img.shields.io/badge/Python-3.9+-blue.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![atproto](https://img.shields.io/badge/Bluesky-AT_Protocol-0285FF.svg?style=flat-square&logo=bluesky&logoColor=white)](https://github.com/marshaldb/atproto)
+[![NetworkX](https://img.shields.io/badge/NetworkX-3.1+-orange.svg?style=flat-square)](https://networkx.org/)
+[![spaCy](https://img.shields.io/badge/spaCy-3.6+-green.svg?style=flat-square&logo=spacy&logoColor=white)](https://spacy.io/)
+[![LaTeX](https://img.shields.io/badge/LaTeX-Compiled_Report-008080.svg?style=flat-square&logo=latex&logoColor=white)](report/report.pdf)
 
-**Course:** WSA — Web and Social Media Search and Analysis
+> **Web and Social Media Analysis (WSA)**  
+> *Academic Project — University of Pavia / University of Milano-Bicocca*  
+> 
+> **Authors:**  
+> * Lorenzo Brusati ([lorenzo.brusati01@universitadipavia.it](mailto:lorenzo.brusati01@universitadipavia.it))  
+> * Lorenzo Cinquemani ([lorenzo.cinquemani01@universitadipavia.it](mailto:lorenzo.cinquemani01@universitadipavia.it))  
+> * Lorenzo Goatelli ([lorenzo.goatelli01@universitadipavia.it](mailto:lorenzo.goatelli01@universitadipavia.it))  
 
 ---
 
-## Repository Structure
+## 📖 Project Overview
+
+This repository contains a full-stack data science pipeline that collects, enriches, models, and visualizes social media discussions from **Bluesky (via the AT Protocol)** during the **US Open 2025** (August 21 to September 10, 2025). The project focuses on the intense rivalry between tennis champions **Jannik Sinner** and **Carlos Alcaraz**. 
+
+By applying **Natural Language Processing (NLP)**, **Social Network Analysis (SNA)**, and **Semi-Supervised Graph Propagation**, the pipeline extracts community structures, profiles public sentiment/emotions, maps user leaning (stances), and exposes an interactive, browser-based web dashboard.
+
+---
+
+## 🗂️ Repository Structure
 
 ```
 project_root\
-├── main.py                  # Root-level entrypoint (hit-and-run execution script)
-├── src\
-│   ├── crawler.py           # AT Protocol data crawler
-│   ├── network_analysis.py  # Network modeling, centralities, and community detection
-│   ├── nlp_analysis.py      # VADER sentiment, spaCy NER, DBpedia Spotlight NEL, Kruskal-Wallis testing
-│   ├── stance_propagation.py # Iterative Laplacian smoothing Stance Propagation
-│   ├── visualization.py     # Matplotlib and Seaborn visualization rendering
-│   ├── export_dashboard_data.py # Profiles communities for all algorithms and exports dashboard JSON
-│   ├── utils.py             # Shared utilities (Regex fallback entity linking, data loader, etc.)
-│   └── emotion_analysis.py  # NRC Emotion Lexicon module
-├── data\                    # Dataset files (crawled posts and centrality metrics)
-│   ├── sinner_alcaraz_posts.csv
-│   └── network_centrality_metrics.csv
-├── plots\                   # Generated plot images (community detection comparison, stance propagation, etc.)
-├── report\                  # LaTeX report source files and compiled PDF
-│   ├── report.tex
-│   └── report.pdf
-├── .env.example             # Credentials template
-├── web\                     # Interactive dashboard assets
-│   ├── index.html           # Interactive visual explorer interface (HTML)
-│   ├── dashboard.js         # Visual explorer script (dynamically handles vis-network rendering)
-│   ├── dashboard.css        # Premium dashboard dark theme styling
-│   └── data\
-│       └── dashboard_data.json # Profiles communities for all algorithms (JSON payload)
-└── requirements.txt         # Python dependencies
+├── main.py                     # Primary pipeline entrypoint (runs NLP, SNA, Stance Prop, and Exports)
+├── start_dashboard.py          # Dashboard launcher (spins up local server & opens browser automatically)
+├── requirements.txt            # Python environment dependencies
+├── .env.example                # Bluesky API credentials template
+│
+├── src\                        # Core analysis modules
+│   ├── crawler.py              # AT Protocol crawler with backoff retries & time-window pagination
+│   ├── utils.py                # Text cleaners, DBpedia circuit breaker, dataset loaders
+│   ├── emotion_analysis.py     # NRC Emotion Lexicon scoring and rivalry comparison plotting
+│   ├── nlp_analysis.py         # VADER sentiment, spaCy NER, DBpedia SPOTLIGHT NEL, Kruskal-Wallis test
+│   ├── network_analysis.py     # Undirected/Directed graph creation, centralities, community detection
+│   ├── stance_propagation.py    # Laplacian smoothing (Label Spreading) iterative stance propagation
+│   ├── visualization.py        # Comparative plot rendering (Generates 13 high-res plots)
+│   └── export_dashboard_data.py # Profiles communities for all algorithms and compiles JSON payload
+│
+├── data\                       # Dataset folders (git-ignored, populated at runtime)
+│   ├── sinner_alcaraz_posts.csv      # Raw crawled posts from Bluesky
+│   ├── sinner_alcaraz_processed.csv  # NLP-enriched post-level dataset
+│   └── network_centrality_metrics.csv # Combined centrality and community metrics per user
+│
+├── plots\                      # Visualizations generated by the pipeline (13 figures)
+├── report\                     # LaTeX report sources and compiled PDF
+│   ├── report.tex              # LaTeX paper detailing project methodology and findings
+│   └── report.pdf              # Compiled WSA academic paper
+│
+└── web\                        # Browser-based Interactive Dashboard
+    ├── index.html              # Explorer UI (dark themed, Vis.js graph container)
+    ├── dashboard.css           # Premium dashboard styling
+    ├── dashboard.js            # Vis.js graph engine & community profiler controller
+    └── data\
+        └── dashboard_data.json # Integrated graph structure & algorithm-specific profiles
 ```
 
 ---
 
-## Setup (first time only)
+## ⚙️ System Architecture & Data Flow
 
-Open a Command Prompt/PowerShell in this folder and run:
+```mermaid
+graph TD
+    A[Bluesky API / AT Protocol] -->|Crawler: sinner OR alcaraz| B(src/crawler.py)
+    B -->|Saves Raw CSV| C[data/sinner_alcaraz_posts.csv]
+    
+    C --> D(Pipeline: main.py)
+    
+    subgraph Pipeline [main.py Pipeline Steps]
+        D -->|Step 1: NLP Enrichment| E(src/nlp_analysis.py)
+        E -->|VADER & NRC Lexicon| E1[Sentiment & Emotion Scoring]
+        E -->|spaCy NER & DBpedia Spotlight| E2[Entity Recognition & Linking]
+        E1 & E2 -->|Enriched CSV| F[data/sinner_alcaraz_processed.csv]
+        
+        F -->|Step 2: Graph Modelling| G(src/network_analysis.py)
+        G -->|Replies & Mentions| G1[Build Undirected G & Directed Gd Graphs]
+        G1 -->|Centrality Analysis| G2[Compute Closeness, Betweenness, Degree, PageRank]
+        G1 -->|Community Benchmarking| G3[Louvain, Leiden, Infomap, LPA, Fluid]
+        G2 & G3 -->|SNA Metrics CSV| H[data/network_centrality_metrics.csv]
+        
+        H -->|Step 3: Attitudinal Evaluation| I[Kruskal-Wallis Community Sentiment Polarization]
+        I -->|Step 4: Stance Propagation| J(src/stance_propagation.py)
+        J -->|Laplacian Smoothing| J1[Classify Leaning: Sinner vs Alcaraz vs Neutral]
+        J1 -->|Update Metrics CSV| K[data/network_centrality_metrics.csv]
+        
+        K -->|Step 5: Visualizations| L(src/visualization.py)
+        L -->|Matplotlib / Seaborn| L1[Generate 13 Figures in plots/ & report/]
+        
+        K -->|Step 6: Export Dashboard JSON| M(src/export_dashboard_data.py)
+        M -->|Compile Graph & Profiles| N[web/data/dashboard_data.json]
+    end
+    
+    N --> O((Interactive Web Dashboard))
+    L1 --> P((LaTeX Report Compilation))
+    
+    style Pipeline fill:#1a1c23,stroke:#34495e,stroke-width:2px;
+    style O fill:#2c3e50,stroke:#3498db,stroke-width:2px;
+    style P fill:#2c3e50,stroke:#1abc9c,stroke-width:2px;
+```
 
+---
+
+## 🛠️ Installation & Environment Setup
+
+The pipeline has been designed to run out-of-the-box, automatically bootstrapping models on its first execution.
+
+### 1. Clone & Navigate to the Repository
+```bash
+git clone https://github.com/brusati04/bluesky-sinner-alcaraz-analysis.git
+cd bluesky-sinner-alcaraz-analysis
+```
+
+### 2. Install Required Packages
+Using a terminal or Command Prompt, run:
 ```bash
 pip install -r requirements.txt
-python -m spacy download en_core_web_sm
-python -c "import nltk; nltk.download('stopwords'); nltk.download('punkt'); nltk.download('punkt_tab')"
-python -m textblob.download_corpora
 ```
+
+> [!NOTE]
+> On the first execution of `main.py`, the pipeline will **automatically check and download** required NLP packages if they are missing (specifically spaCy's `en_core_web_sm` model and NLTK's `stopwords`, `punkt`, and `punkt_tab` resources). 
 
 ---
 
-## Configure Credentials
+## 🔑 Configure API Credentials (Optional)
 
-Only needed if you want to re-crawl data. Skip this step if you are using the provided `data\sinner_alcaraz_posts.csv`.
+The repository includes pre-crawled data (`data/sinner_alcaraz_posts.csv`), allowing you to skip step 1. If you wish to re-run the data collection crawler:
 
 1. Copy `.env.example` to `.env`:
-   ```bash
-   copy .env.example .env
-   ```
-2. Open `.env` in Notepad and fill in your Bluesky credentials:
+   - **Windows:** `copy .env.example .env`
+   - **macOS/Linux:** `cp .env.example .env`
+2. Open `.env` and fill in your Bluesky credentials:
    ```env
-   BSKY_HANDLE=your-email@domain.com
-   BSKY_APP_PASSWORD=your-app-password-here
+   BSKY_HANDLE=your-bluesky-handle@domain.com
+   BSKY_APP_PASSWORD=your-app-specific-password
    ```
-
-Never share or commit the `.env` file.
+   *(Create an app password via Bluesky Settings -> App Passwords)*
 
 ---
 
-## Run the Pipeline
+## 🚀 Running the Pipeline
 
-### Step 1 — Data collection (optional, skip if data already exists)
-
-From Command Prompt:
+### Step 1 — Crawling Bluesky (Optional)
 ```bash
-python src\crawler.py
+python src/crawler.py
 ```
-Output: `data\sinner_alcaraz_posts.csv`
+* **What it does:** Crawls posts containing queries for Sinner and Alcaraz, resolving pagination constraints by slicing the query day-by-day. It gracefully backs off (`time.sleep`) on `429 Too Many Requests` API status codes.
+* **Output:** `data/sinner_alcaraz_posts.csv`
 
-### Step 2 — Run the Analysis & Dashboard Data Export (Hit-and-Run Pipeline)
-
-From Command Prompt:
+### Step 2 — Run the Core Analysis & Exports
 ```bash
 python main.py
 ```
-This single entrypoint handles the entire analysis and visualization pipeline end-to-end:
-* **Loads and Preprocesses** crawled Bluesky data.
-* **Performs Social Network Analysis (SNA)**: builds undirected/directed networks, computes degree, closeness, PageRank, and assortativity metrics.
-* **Compares Community Detection Algorithms**: Louvain, Leiden, Infomap, Label Propagation (LPA), and Fluid Communities (on GCC).
-* **Enriches Text with NLP**: extracts VADER sentiments, calculates NRC emotion profiles, maps entities via spaCy NER and DBpedia Spotlight NEL.
-* **Propagates Stance Attributes**: runs Laplacian smoothing to classify Sinner vs. Alcaraz vs. Neutral fans.
-* **Generates Comparative Visualizations**: saves 12 comparative plots to `plots/` and `report/`.
-* **Exports Dashboard JSON**: automatically runs `export_dashboard_data.py` to generate `web/data/dashboard_data.json`.
+* **What it does:** Executes the complete NLP processing, SNA modeling, Stance Propagation, and visualization pipeline, outputting results directly.
+* **Outputs:** 
+  - `data/sinner_alcaraz_processed.csv`
+  - `data/network_centrality_metrics.csv`
+  - `plots/` & `report/` (13 comparative PNG plots)
+  - `web/data/dashboard_data.json`
 
-
-### Step 4 — Launch the Interactive Explorer
-
-To view the premium interactive dashboard with dynamic algorithm switching:
-1. Start a local HTTP server targeting the `web` folder:
-   ```bash
-   python -m http.server 8000 -d web
-   ```
-2. Open your browser and navigate to **`http://localhost:8000`** (this automatically serves `web/index.html`).
-3. Use the **Detection Algorithm** dropdown in the Left Sidebar to switch community partitions dynamically (forces nodes to filter and rearrange dynamically in the graph view).
+### Step 3 — Launch the Web Explorer Dashboard
+Rather than using raw Python HTTP commands, use the launcher:
+```bash
+python start_dashboard.py
+```
+* **What it does:** Spins up a localized python server on port `8000` mapped to the `web/` folder, and **automatically launches your default browser** to `http://localhost:8000`. Press `Ctrl+C` in the terminal to stop the server.
 
 ---
 
-## Troubleshooting
+## 🧠 Core Methodologies & Features
 
-**"Python is not recognized"**  
-→ Re-install Python and make sure to check "Add Python to PATH".
+### 1. NLP Content Enrichment (`src/nlp_analysis.py`)
+* **VADER Sentiment Indexing:** Computes positive, negative, and compound scores. Sentiments are binned into categories based on standard baselines: $\ge 0.05$ (Positive), $\le -0.05$ (Negative), and neutral in between.
+* **NRC Emotion Lexicon:** Profiles posts across 8 fundamental dimensions: *joy, trust, anticipation, surprise, fear, sadness, anger, and disgust*.
+* **spaCy & DBpedia Spotlight Named Entity Linking (NEL):** Identifies Named Entities (NER) and links them to formal DBpedia URIs.
+  > [!TIP]
+  > **API Resilience:** If DBpedia Spotlight goes down or throttles requests, a built-in **Circuit Breaker** trips, entering a 60-second cooldown phase where the script falls back to local regex-based keyword mappings to keep execution flowing without errors.
+* **Kruskal-Wallis Attitudinal Polarization Test:** Validates if community structures exhibit statistically significant sentiment differences (evaluating VADER compound distributions across community members). If the test statistic is high and $p < 0.05$, community boundaries are mathematically proven to represent distinct echo chambers.
 
-**"No module named X"**  
-→ Run `setup.bat` again, or manually: `pip install -r requirements.txt`
+### 2. Social Network Analysis & Graph Mining (`src/network_analysis.py`)
+* **Network Graph Formulation:** Mentions and replies are parsed to build:
+  - Undirected weighted graph $G$: captures overall interaction density.
+  - Directed weighted graph $Gd$: models the directional flow of information.
+* **Centrality Profiling:** Computes Degree Centrality, Closeness Centrality, and Betweenness Centrality on $G$, plus In-degree, Out-degree, and PageRank (influence prestige) on $Gd$.
+* **Community Detection Benchmarking:** Benchmarks five different algorithms:
+  1. **Louvain:** Greedy modularity maximization.
+  2. **Leiden:** Advanced partition refinement guaranteeing contiguous communities.
+  3. **Infomap:** Directed, flow-based community division.
+  4. **Label Propagation (LPA):** Fast rule-based neighborhood propagation.
+  5. **Fluid Communities:** Constrained density clustering computed strictly on the Giant Connected Component (GCC).
+* **Assortativity Coefficient:** Examines degree assortativity and community homophily coefficients to measure network fragmentation.
 
-**"Missing Bluesky credentials"**  
-→ You need a `.env` file. See "Configure Credentials" above. If you already have the CSV data, you can skip the crawler entirely.
+### 3. Stance Propagation (`src/stance_propagation.py`)
+To identify Sinner vs. Alcaraz fans when users don't explicitly state their favorite, we implement an iterative **Laplacian Smoothing / Label Spreading** model.
 
-**"data\sinner_alcaraz_posts.csv not found"**  
-→ Either run the crawler (Step 1) or make sure the CSV file is in the `data\` folder.
+* **Initial Post Stance:**
+  $$s_{\text{post}} = \text{sentiment\_compound} \times (I_{\text{Sinner}} - I_{\text{Alcaraz}})$$
+  *Where $I_{\text{Player}} = 1$ if the post references that player, and $0$ otherwise. Mentions of Sinner with positive sentiment score positive, while Alcaraz positive sentiment scores negative.*
+* **Initial User Stance ($f^{(0)}$):** Average stance of the user's posts.
+* **Iterative Smoothing Formula:**
+  $$f^{(t+1)}(i) = \alpha f^{(0)}(i) + (1-\alpha) \sum_{j \in \mathcal{N}(i)} \frac{w_{ij}}{\sum_{k \in \mathcal{N}(i)} w_{ik}} f^{(t)}(j)$$
+  *Where $w_{ij}$ is the connection weight between user $i$ and neighbor $j$. The parameter $\alpha = 0.15$ regulates how much users adhere to their original stance vs. adapting to their network.*
+* **Convergence & Leaning Classification:** Propagates until differences fall below $\text{tol} = 10^{-5}$. Nodes are classified into:
+  - **Sinner Fan:** Stance Score $> 0.05$ (marked Blue in graphs)
+  - **Alcaraz Fan:** Stance Score $< -0.05$ (marked Orange in graphs)
+  - **Neutral / Undecided:** Otherwise (marked Grey in graphs)
 
 ---
 
-## Dependencies
+## 📊 Visualization Suite (`plots/` & `report/`)
 
-Key libraries listed in `requirements.txt`:
-* `atproto` — Bluesky AT Protocol SDK
-* `networkx` — Graph construction and SNA metrics
-* `igraph` + `leidenalg` — Optimized Leiden community algorithm
-* `infomap` — Infomap community detection
-* `vaderSentiment` — Sentiment analysis (VADER)
-* `nrclex` — NRC Emotion Lexicon for emotion analysis
-* `spacy` + `en_core_web_sm` — Named Entity Recognition
-* `requests` — DBpedia Spotlight NEL API calls (with circuit breaker)
-* `python-dotenv` — Credential management
-* `scipy` — Kruskal-Wallis statistical test
+The pipeline generates 13 visualizations representing key results:
+* **`network_graph.png`** / **`leiden_network_graph.png`** / **`infomap_network_graph.png`** / **`lpa_network_graph.png`** / **`fluid_network_graph.png`**: Multi-algorithm community layout comparative graphs.
+* **`stance_network_graph.png`**: Network visualization color-coded by propagated user stance (Blue vs. Orange vs. Grey).
+* **`network_graph_directed.png`**: Directed graph displaying PageRank nodes and interaction paths.
+* **`sentiment_distribution.png`**: Bar chart showing overall corpus sentiment slices.
+* **`sentiment_over_time.png`**: Rolling average sentiment plotted against actual US Open 2025 event dates (e.g. Finals).
+* **`rivalry_comparison.png`**: Bar & line chart comparing player mention volumes vs. average compound sentiment.
+* **`emotion_distribution.png`** / **`emotion_rivalry_comparison.png`**: Profiles generated from the NRC Lexicon comparison.
+* **`community_sentiment_polarization.png`**: Boxplots charting VADER distributions across communities, highlighting Kruskal-Wallis significance.
+
+---
+
+## 🖥️ Interactive Web Dashboard Explorer
+
+The explorer dashboard serves as a premium dark-themed interface built on Vis.js.
+
+* **Dynamic Network Rendering:** Real-time canvas representing nodes and edges (reply/mention links).
+* **Community Algorithm Selector:** Sidebar dropdown to switch community partitions dynamically (updates node colors and structure overlays).
+* **Detailed Community Profile Cards:** On selection of any community, displays:
+  - **Heuristic Category Classification:** Automated taxonomy tagging (*hype/meme group*, *analytical/journalism*, *utility/bot feed*, *fan chat*).
+  - **Vocabulary Profile:** Top 10 lemmatized keywords.
+  - **Entities Profile:** Linked DBpedia entities.
+  - **NRC Emotion Distribution:** Local spider/radar emotion metrics.
+  - **Top Influence Users:** Top handles based on PageRank.
+  - **Representative Posts:** Highlighted high-engagement post feeds.
+
+---
+
+## 🛠️ Troubleshooting & FAQs
+
+#### ❓ The script fails saying `spacy.load("en_core_web_sm")` failed
+The script is programmed to automatically execute `python -m spacy download en_core_web_sm` if the load fails. However, if your environment blocks subprocesses, run this manually:
+```bash
+python -m spacy download en_core_web_sm
+```
+
+#### ❓ Can I run the analysis without setting up a Bluesky account?
+**Yes!** The repository comes with a pre-crawled, curated dataset located in `data/sinner_alcaraz_posts.csv`. Running `python main.py` will read this file automatically and run the complete analysis.
+
+#### ❓ The DBpedia Spotlight links are missing or sparse
+If the DBpedia API is down or timing out, the pipeline's circuit breaker will activate, falling back to local regex-based mapping. Verify your internet connection or check if [DBpedia Spotlight](https://api.dbpedia-spotlight.org/) is reachable.
+
+---
+
+## 🎓 Academic Course Reference
+**WSA Course Website / University Guidelines**  
+*M.Sc. in Computer Science / M.Sc. in Data Science*  
+Jointly hosted by **University of Pavia** and **University of Milano-Bicocca**.

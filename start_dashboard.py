@@ -31,9 +31,9 @@ def main():
     try:
         with socketserver.TCPServer(("", PORT), DashboardHandler) as httpd:
             print(f"\n=========================================")
-            print(f"🚀 Sinner vs Alcaraz Dashboard Server")
-            print(f"👉 Running at: http://localhost:{PORT}")
-            print(f"⌨️  Press Ctrl+C in this terminal to stop")
+            print(f"[*] Sinner vs Alcaraz Dashboard Server")
+            print(f"-> Running at: http://localhost:{PORT}")
+            print(f"-> Press Ctrl+C in this terminal to stop")
             print(f"=========================================\n")
             
             # Start a timer to open the browser 1 second after server starts
