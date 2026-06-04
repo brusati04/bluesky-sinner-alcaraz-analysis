@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sinner vs Alcaraz Community Explorer</title>
+    <!-- Premium Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <!-- Vis Network Standalone for Graph Visualization -->
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Custom Style -->
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- HEADER -->
+        <header class="app-header">
+            <div class="header-logo-section">
+                <div class="header-glow"></div>
+                <i data-lucide="network" class="logo-icon animate-pulse"></i>
+                <div class="header-title-wrapper">
+                    <h1>Sinner & Alcaraz <span class="text-gradient">Community Explorer</span></h1>
+                    <p class="header-subtitle">Interactive SNA & Sentiment Analysis Dashboard of US Open 2025 Tennis Fans on Bluesky</p>
+                </div>
+            </div>
+            <div class="header-stats">
+                <div class="stat-badge">
+                    <span class="stat-value" id="stat-nodes">484</span>
+                    <span class="stat-label">Nodes</span>
+                </div>
+                <div class="stat-badge">
+                    <span class="stat-value" id="stat-edges">328</span>
+                    <span class="stat-label">Edges</span>
+                </div>
+                <div class="stat-badge">
+                    <span class="stat-value" id="stat-modularity">0.974</span>
+                    <span class="stat-label">Modularity (Q)</span>
+                </div>
+                <div class="stat-badge">
+                    <span class="stat-value" id="stat-comms">167</span>
+                    <span class="stat-label">Communities</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- MAIN LAYOUT -->
+        <div class="main-layout">
+            
+            <!-- LEFT COLUMN: SIDEBAR FILTERS & COMMUNITY DIRECTORY -->
+            <aside class="sidebar-left glass-card">
+                <div class="card-header">
+                    <i data-lucide="cpu" class="header-icon icon-purple"></i>
+                    <h2>Detection Algorithm</h2>
+                </div>
+                <p class="section-description">Select community partitioning method:</p>
+                <div class="select-container">
+                    <select id="algorithm-select" class="premium-select">
+                        <option value="louvain" selected>Louvain (Modularity Q: 0.9678)</option>
+                        <option value="leiden">Leiden (Modularity Q: 0.9678)</option>
+                        <option value="infomap">Infomap (Modularity Q: 0.9348)</option>
+                        <option value="lpa">Label Propagation (Modularity Q: 0.8612)</option>
+                        <option value="fluid">Fluid Communities (GCC Q: 0.3759)</option>
+                    </select>
+                </div>
+
+                <div class="card-header separator">
+                    <i data-lucide="sliders" class="header-icon icon-purple"></i>
+                    <h2>Taxonomy Filter</h2>
+                </div>
+                <p class="section-description">Filter communities and nodes by their conversational characteristics:</p>
+                
+                <!-- CATEGORY FILTER BUTTONS -->
+                <div class="category-filters">
+                    <button class="filter-btn active" data-category="all">
+                        <span class="btn-color-tag all-color"></span>
+                        <div class="btn-label">All Communities</div>
+                    </button>
+                    <button class="filter-btn" data-category="hype/meme">
+                        <span class="btn-color-tag hype-color"></span>
+                        <div class="btn-label">Hype / Meme</div>
+                    </button>
+                    <button class="filter-btn" data-category="utility/bot">
+                        <span class="btn-color-tag bot-color"></span>
+                        <div class="btn-label">Utility / Bot</div>
+                    </button>
+                    <button class="filter-btn" data-category="analytical/journalism">
+                        <span class="btn-color-tag analytical-color"></span>
+                        <div class="btn-label">Analytical / Journalism</div>
+                    </button>
+                    <button class="filter-btn" data-category="fan_chat">
+                        <span class="btn-color-tag chat-color"></span>
+                        <div class="btn-label">General Fan Chat</div>
+                    </button>
+                </div>
+
+                <div class="card-header separator">
+                    <i data-lucide="list" class="header-icon icon-blue"></i>
+                    <h2>Communities List</h2>
+                </div>
+                <div class="search-box">
+                    <i data-lucide="search" class="search-icon"></i>
+                    <input type="text" id="comm-search" placeholder="Search communities or users...">
+                </div>
+
+                <!-- DIRECTORY CONTAINER -->
+                <div class="community-directory" id="community-list">
+                    <div class="loading-spinner">
+                        <div class="spinner"></div>
+                        <p>Loading communities database...</p>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- CENTER COLUMN: INTERACTIVE NETWORK VISUALIZATION -->
+            <main class="network-container glass-card">
+                <div class="network-header">
+                    <div class="network-header-title">
+                        <i data-lucide="share-2" class="header-icon icon-green"></i>
+                        <h2>Interactive Interaction Network</h2>
+                    </div>
+                    <div class="network-controls">
+                        <button class="control-btn" id="btn-fit" title="Fit Entire Network">
+                            <i data-lucide="minimize-2"></i> Fit Graph
+                        </button>
+                        <button class="control-btn" id="btn-clear-selection" title="Clear Graph Selection">
+                            <i data-lucide="rotate-ccw"></i> Clear Selection
+                        </button>
+                    </div>
+                </div>
+                <div class="graph-legend">
+                    <span class="legend-item"><span class="legend-dot hype-color"></span> Hype/Meme</span>
+                    <span class="legend-item"><span class="legend-dot bot-color"></span> Utility/Bot</span>
+                    <span class="legend-item"><span class="legend-dot analytical-color"></span> Analytical/Journalism</span>
+                    <span class="legend-item"><span class="legend-dot chat-color"></span> General Fan Chat</span>
+                </div>
+                
+                <!-- NETWORK WRAPPER -->
+                <div id="mynetwork" class="network-canvas">
+                    <div class="network-loading" id="network-loading-screen">
+                        <div class="spinner"></div>
+                        <p>Solving physics forces & rendering 484 nodes... <span id="physics-progress">0%</span></p>
+                    </div>
+                </div>
+                
+                <div class="network-tip">
+                    <i data-lucide="info" class="tip-icon"></i>
+                    <span><strong>Pro-Tip:</strong> Scroll to Zoom. Click a node to inspect its conversational community, sentiments, and original posts. Drag to pan.</span>
+                </div>
+            </main>
+
+            <!-- RIGHT COLUMN: COMMUNITY DETAILS & POSTS FEED -->
+            <section class="sidebar-right glass-card" id="detail-panel">
+                <!-- DEFAULT OVERVIEW STATE -->
+                <div class="detail-state-default" id="state-default">
+                    <div class="empty-state-container">
+                        <div class="glow-sphere"></div>
+                        <i data-lucide="message-square" class="empty-icon"></i>
+                        <h3>Community Explorer</h3>
+                        <p>Click any node in the graph, search in the directory, or select a community from the list to reveal:</p>
+                        <ul class="features-list">
+                            <li><i data-lucide="check" class="list-bullet"></i> Size & modularity metrics</li>
+                            <li><i data-lucide="check" class="list-bullet"></i> Automatic topic heuristic tagging</li>
+                            <li><i data-lucide="check" class="list-bullet"></i> Sentiment index & VADER scores</li>
+                            <li><i data-lucide="check" class="list-bullet"></i> NRC Lexicon emotion profiles</li>
+                            <li><i data-lucide="check" class="list-bullet"></i> Actual microblog posts & interactions</li>
+                        </ul>
+                        <div class="action-prompt">
+                            <span>Select a community or click the graph to begin.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SELECTED PROFILE STATE -->
+                <div class="detail-state-selected hidden" id="state-selected">
+                    <!-- community title & header -->
+                    <div class="detail-header-card">
+                        <div class="badge-wrapper">
+                            <span class="category-badge" id="detail-category-badge">Hype / Meme</span>
+                            <span class="community-id-badge" id="detail-id-badge">Comm #40</span>
+                        </div>
+                        <h3 id="detail-title">Tennis Fan Club</h3>
+                        <p class="community-description" id="detail-description">Description of community...</p>
+                    </div>
+
+                    <!-- community quick stats -->
+                    <div class="quick-stats-row">
+                        <div class="q-stat">
+                            <span class="q-label">Users</span>
+                            <span class="q-value" id="detail-size">45</span>
+                        </div>
+                        <div class="q-stat">
+                            <span class="q-label">Posts Volume</span>
+                            <span class="q-value" id="detail-post-count">146</span>
+                        </div>
+                        <div class="q-stat">
+                            <span class="q-label">Avg Sentiment</span>
+                            <span class="q-value" id="detail-avg-sentiment">+0.32</span>
+                        </div>
+                    </div>
+
+                    <!-- sentiment meter -->
+                    <div class="sentiment-analysis-section">
+                        <div class="section-title-sm">VADER Compound Sentiment</div>
+                        <div class="sentiment-meter-wrapper">
+                            <div class="sentiment-meter-bar">
+                                <div class="sentiment-meter-fill" id="detail-sentiment-fill" style="width: 50%;"></div>
+                                <div class="sentiment-meter-center"></div>
+                            </div>
+                            <div class="sentiment-meter-labels">
+                                <span>Negative (-1.0)</span>
+                                <span class="neutral-lbl">Neutral (0.0)</span>
+                                <span>Positive (+1.0)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- top keywords and entities -->
+                    <div class="tags-grid">
+                        <div class="tag-card">
+                            <div class="card-title-sm"><i data-lucide="key" class="tag-icon"></i> Top Keywords</div>
+                            <div class="tag-list" id="detail-top-words">
+                                <!-- injected words -->
+                            </div>
+                        </div>
+                        <div class="tag-card">
+                            <div class="card-title-sm"><i data-lucide="hash" class="tag-icon"></i> Top Entities</div>
+                            <div class="tag-list" id="detail-top-entities">
+                                <!-- injected entities -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- emotions breakdown -->
+                    <div class="emotions-section">
+                        <div class="section-title-sm"><i data-lucide="smile" class="tag-icon"></i> Emotion Distribution (NRC Lexicon)</div>
+                        <div class="emotions-bars" id="detail-emotions-list">
+                            <!-- injected emotions bars -->
+                        </div>
+                    </div>
+
+                    <!-- top members list -->
+                    <div class="top-members-section">
+                        <div class="section-title-sm"><i data-lucide="users" class="tag-icon"></i> Influential Users (PageRank)</div>
+                        <div class="members-flex" id="detail-top-users">
+                            <!-- members -->
+                        </div>
+                    </div>
+
+                    <!-- posts feed section -->
+                    <div class="posts-feed-section">
+                        <div class="feed-header">
+                            <div class="section-title-sm"><i data-lucide="message-circle" class="tag-icon"></i> Conversational Posts Feed</div>
+                            <span class="feed-count" id="feed-count-display">Showing 10 posts</span>
+                        </div>
+                        <div class="posts-feed-container" id="detail-posts-feed">
+                            <!-- posts injected here -->
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+        </div>
+    </div>
+    
+    <!-- Script Execution -->
+    <script src="dashboard.js"></script>
+</body>
+</html>

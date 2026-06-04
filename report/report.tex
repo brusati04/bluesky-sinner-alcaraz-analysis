@@ -1,0 +1,259 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{cite}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=cyan,
+    pdftitle={SNA and NLP Comparative Analysis Report - US Open 2025},
+    pdfpagemode=FullScreen,
+}
+
+\title{\textbf{Web and Social Media Search and Analysis}\\
+\large{Jannik Sinner vs. Carlos Alcaraz: A Comparative Undirected and Directed Network and NLP Analysis on Bluesky during the US Open 2025}}
+\author{
+    \textbf{Lorenzo Brusati}\\
+    \texttt{lorenzo.brusati01@universitadipavia.it}
+    \and
+    \textbf{Lorenzo Cinquemani}\\
+    \texttt{lorenzo.cinquemani01@universitadipavia.it}
+    \and
+    \textbf{Lorenzo Goatelli}\\
+    \texttt{lorenzo.goatelli01@universitadipavia.it}
+}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This study presents a comprehensive, end-to-end social network analysis (SNA) and natural language processing (NLP) evaluation of the digital footprint surrounding the Jannik Sinner versus Carlos Alcaraz tennis rivalry on the decentralized microblogging platform Bluesky. By crawling \textbf{7,339 unique posts} strictly bounded within the temporal window of the \textbf{US Open 2025 (August 25 to September 8, 2025)}, we examine the structural and semantic properties of social communication. Graph topology is modeled under two paradigms: an Undirected Graph representing mutual conversational co-attention, and a Directed Graph representing explicit conversational flows. 
+
+Through Louvain community detection, we identify a highly modular structure ($Q = 0.9678$, 181 communities). Natural language processing models—including VADER sentiment scoring, NRC emotion lexicon matching, and DBpedia Spotlight Named Entity Linking (NEL)—reveal a public discourse dominated by anticipatory tension and fear-related clusters, reflecting match outcomes and Sinner's doping controversy. Finally, by mapping community partitions to sentiment score distributions, a Kruskal-Wallis H-test ($H = 116.6158$, $p = 0.0000$) reveals statistically significant attitudinal polarization, demonstrating that structurally isolated sub-communities carry highly distinct emotional and attitudinal registers.
+\end{abstract}
+
+\newpage
+
+\section{Introduction}
+The rivalry between Jannik Sinner and Carlos Alcaraz has emerged as the defining narrative of modern men's tennis, marking a generational transition at the helm of the ATP Tour. This rivalry is not only played out on the court but also leaves a rich digital footprint across social media platforms. 
+
+This paper investigates the conversational structures and sentiments surrounding these two players on the decentralized social network \textbf{Bluesky} during the \textbf{US Open 2025}. Specifically, this study addresses three core Research Questions:
+\begin{enumerate}
+    \item \textbf{RQ1: Structural Characteristics.} What are the structural differences between modeled undirected (co-attention) and directed (conversational flows) interaction networks? Does a Giant Connected Component emerge?
+    \item \textbf{RQ2: Attitudinal Polarization.} Do isolated conversational sub-communities exhibit statistically significant differences in their sentiments?
+    \item \textbf{RQ3: Semantic Profile.} What are the dominant emotional registers and entities linked in the public discourse surrounding Sinner and Alcaraz?
+\end{enumerate}
+
+By building a consolidated pipeline that executes undirected and directed social network analysis alongside advanced natural language processing, this study provides a unified empirical look at microblogging tennis dynamics.
+
+---
+
+\section{Data Collection \& Preprocessing}
+Data was crawled directly from the Bluesky platform utilizing a custom script executing day-by-day queries to bypass the API's standard pagination limit. The collection query targeted keywords associated with the players (e.g. \texttt{sinner}, \texttt{alcaraz}, \texttt{jannik}, \texttt{carlitos}) and was strictly bounded between \textbf{August 25, 2025} and \textbf{September 8, 2025}, matching the exact duration of the US Open tournament.
+
+A total of \textbf{7,339 unique posts} were successfully retrieved. Preprocessing steps included:
+\begin{itemize}
+    \item Parsing list-based fields (mentions, hashtags, external links).
+    \item Mapping author and target decentralized identifiers (DIDs) to human-readable handles (e.g., \texttt{thetennisletter.bsky.social}).
+    \item Text normalization, removing URLs and handle tags for NLP processing while preserving emojis.
+\end{itemize}
+
+---
+
+\section{Social Network Analysis (SNA)}
+The social network was modeled under two structural paradigms:
+\begin{enumerate}
+    \item \textbf{Undirected Network ($G$)}: Edges represent mutual co-attention where users are linked if one mentions or replies to another, collapsing directional flow.
+    \item \textbf{Directed Network ($G_d$)}: Edges represent explicit conversational flow pointing from the initiator to the target ($User_A \rightarrow User_B$ if $User_A$ replies to or mentions $User_B$).
+\end{enumerate}
+
+\subsection{Network Topology Comparison}
+Table~\ref{tab:topology} summarizes the global topological properties of both networks.
+
+\begin{table}[H]
+\centering
+\caption{Global Topological Comparison of Undirected and Directed Formulations}
+\label{tab:topology}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{Undirected Graph ($G$)} & \textbf{Directed Graph ($G_d$)} \\
+\midrule
+Nodes ($N$) & 534 & 534 \\
+Edges ($E$) & 361 & 373 \\
+Average Degree $\langle k \rangle$ & 1.352 & 1.397 \\
+Modularity ($Q$) & 0.9678 & 0.9678 (Projected) \\
+Communities & 181 & 181 \\
+GCC Size ($N_{GCC}$) & 77 (14.42\%) & 77 (14.42\%) \\
+Degree Assortativity ($r$) & -0.0408 & -0.0060 \\
+Community Assortativity & 0.9887 & N/A \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The network displays a highly modular, fragmented topology. With $Q = 0.9678$, Louvain partitioning detects 181 communities, showing that conversations on Bluesky are organized in small, isolated threads rather than a single unified town square. The emergence of a Giant Connected Component (GCC) of 77 nodes represents 14.42\% of the network. The mean degree ($\langle k \rangle = 1.352$) is above the critical phase-transition threshold ($\langle k \rangle \sim 1.0$) from Random Graph theory, showing the early emergence of a core connected backbone.
+
+Degree assortativity is weakly negative for both the undirected ($r = -0.0408$) and directed ($r = -0.0060$) network layouts, indicating disassortative mixing. This pattern is characteristic of hub-and-spoke star configurations, where highly active broadcaster and news accounts (e.g., \texttt{thetennisletter.bsky.social}) are linked to and by low-degree fan accounts. Conversely, community assortativity is exceptionally high ($0.9887$), demonstrating a very strong tendency for accounts to link to others within the same detected Louvain partitions. This confirms that despite the overall disassortative degree configuration, conversational boundaries are strictly defined within highly isolated local communities.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{network_graph.png}
+        \caption{Undirected Graph $G$ (node size $\propto$ degree)}
+        \label{fig:net_undirected}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{network_graph_directed.png}
+        \caption{Directed Graph $G_d$ (node size $\propto$ PageRank)}
+        \label{fig:net_directed}
+    \end{subfigure}
+    \caption{Visualizing the Bluesky Interaction Networks during the US Open 2025.}
+    \label{fig:network_comparison}
+\end{figure}
+
+\subsection{Centrality Analysis \& Key Actors}
+Undirected degree centrality measures overall participation, whereas directed in-degree and PageRank centralities highlight prestigious accounts that receive mentions and replies. Out-degree measures broadcasting behavior. Table~\ref{tab:centralities} lists the top actors in the network.
+
+\begin{table}[H]
+\centering
+\caption{Top Accounts by Centrality Metrics}
+\label{tab:centralities}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{User Account} & \textbf{Undir. Degree} & \textbf{In-Degree} & \textbf{Out-Degree} & \textbf{Undir. Closeness} & \textbf{Betweenness} & \textbf{PageRank} \\
+\midrule
+\texttt{thetennisletter.bsky.social} & 0.0244 & 0.0244 & 0.0000 & 0.0418 & 0.0125 & 0.0109 \\
+\texttt{carolebouchard.bsky.social} & 0.0131 & 0.0113 & 0.0038 & 0.0351 & 0.0035 & 0.0110 \\
+\texttt{did:plc:jthow2nfd4r...} & 0.0113 & 0.0113 & 0.0000 & 0.0156 & 0.0004 & 0.0113 \\
+\texttt{marisakabas.bsky.social} & 0.0113 & 0.0113 & 0.0000 & 0.0248 & 0.0026 & 0.0062 \\
+\texttt{benrothenberg.bsky.social} & 0.0131 & 0.0113 & 0.0019 & 0.0184 & 0.0006 & 0.0066 \\
+\texttt{gothamgirlblue.com} & 0.0150 & 0.0094 & 0.0056 & 0.0152 & 0.0002 & 0.0053 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+The analysis reveals that institutional accounts such as \texttt{thetennisletter.bsky.social} act as major informational attractors (high in-degree and PageRank, zero out-degree), indicating they receive attention without initiating replies. Journalists like \texttt{carolebouchard.bsky.social} and \texttt{benrothenberg.bsky.social} show hybrid behavior with non-zero out-degrees, participating in conversations while maintaining high prestige.
+
+---
+
+\section{Natural Language Processing (NLP)}
+
+\subsection{Sentiment Distribution}
+Sentiment was evaluated utilizing VADER (Valence Aware Dictionary and sEntiment Reasoner), yielding the distribution shown in Figure~\ref{fig:sentiment_dist}. The overall sentiment has a neutral-to-positive skew, with positive posts accounting for 35.0\% of the corpus, neutral posts at 47.8\%, and negative posts at 17.2\%.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{sentiment_distribution.png}
+    \caption{Distribution of VADER Sentiment Categories.}
+    \label{fig:sentiment_dist}
+\end{figure}
+
+\subsection{Emotion Profiling}
+An emotion lexicon mapping based on the NRC Emotion Lexicon was applied. The analysis reveals a distinct dominant emotion layout:
+\begin{itemize}
+    \item \textbf{Anticipation (997 posts)}: Driven by pre-match hype, tournament draws, and expectations of Sinner/Alcaraz matches.
+    \item \textbf{Fear (945 posts)}: High prevalence driven by discussions regarding the doping scandal surrounding Sinner (Clostebol case) and fears of tournament exclusions or player injuries.
+    \item \textbf{Trust (549 posts) \& Anger (339 posts)}: Reflecting fan loyalty and polarized debates on administrative transparency.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{emotion_distribution.png}
+        \caption{Global Emotion Mean Scores}
+        \label{fig:emo_global}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{emotion_rivalry_comparison.png}
+        \caption{Player-Specific Emotion Profiles}
+        \label{fig:emo_rivalry}
+    \end{subfigure}
+    \caption{NRC Lexicon Emotion Profiles.}
+    \label{fig:emotions_visual}
+\end{figure}
+
+\subsection{Named Entity Linking (NEL)}
+By running Named Entity Recognition (NER) followed by DBpedia Spotlight Entity Linking, we extracted and disambiguated the key subjects. The top linked entities are:
+\begin{enumerate}
+    \item \textbf{Carlos Alcaraz} (\texttt{http://dbpedia.org/resource/Carlos\_Alcaraz}): 4,943 mentions
+    \item \textbf{US Open (tennis)} (\texttt{http://dbpedia.org/resource/US\_Open\_(tennis)}): 4,789 mentions
+    \item \textbf{Jannik Sinner} (\texttt{http://dbpedia.org/resource/Jannik\_Sinner}): 4,775 mentions
+    \item \textbf{Novak Djokovic} (\texttt{http://dbpedia.org/resource/Novak\_Djokovic}): 973 mentions
+\end{enumerate}
+
+Comparing Sinner and Alcaraz directly (Figure~\ref{fig:rivalry_comp}), Sinner received slightly more mention volume (5,070 vs. 5,062), but Alcaraz displayed a higher average sentiment score (0.129 vs. 0.113).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{rivalry_comparison.png}
+    \caption{Comparison of Player Mentions vs. Average VADER Sentiment Score.}
+    \label{fig:rivalry_comp}
+\end{figure}
+
+\subsection{Temporal Sentiment Dynamics}
+As plotted in Figure~\ref{fig:sentiment_time}, the rolling sentiment dynamics reflect the key events of the US Open 2025. Pre-match tension and doping queries caused a downward pressure on sentiment in late August, followed by recovery during the match days.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{sentiment_over_time.png}
+    \caption{Sentiment Dynamics Over Time (30-Post Rolling Average) with US Open 2025 Match Events.}
+    \label{fig:sentiment_time}
+\end{figure}
+
+---
+
+\section{Attitudinal Polarization Analysis}
+To address \textbf{RQ2}, we map the structural communities identified by Louvain partitioning back to their post-level sentiment profiles. 
+
+Only communities with at least 5 posts were considered to filter out isolated micro-threads (resulting in 47 valid communities). A non-parametric Kruskal-Wallis H-test was performed to evaluate if sentiment scores differ significantly across these communities.
+
+The test yields:
+\begin{equation*}
+    H = 116.6158, \quad p = 0.0000 \quad (p < 0.001)
+\end{equation*}
+
+This extremely low $p$-value allows us to reject the null hypothesis of equal median sentiments. This provides empirical evidence of \textbf{attitudinal polarization}: structurally isolated fan groups do not merely discuss different players; they express statistically distinct attitudes. As shown in Figure~\ref{fig:polarization}, Community \#40 (dominated by sports journalism and analytical updates) and Community \#26 (dominated by fan celebrations and player support) show highly positive average sentiments, while other communities show neutral or negative sentiment offsets.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{community_sentiment_polarization.png}
+    \caption{VADER Sentiment Distributions across Top Communities (Louvain Partitions).}
+    \label{fig:polarization}
+\end{figure}
+
+---
+
+\section{Interactive Dashboard Exploration}
+To facilitate real-time exploration of these communities, we built a web-based Single-Page Application (SPA) dashboard. Using the Vis Network rendering library, the application loads the compiled network payload \texttt{data/dashboard\_data.json} and presents:
+\begin{itemize}
+    \item An interactive graph canvas where nodes are sized by PageRank and colored by their categorized taxonomy.
+    \item A taxonomy filter to instantly isolate communities by their conversational nature: \textbf{Hype/Meme}, \textbf{Utility/Bot}, \textbf{Analytical/Journalism}, or \textbf{General Fan Chat}.
+    \item A detailed community sidebar displaying metrics (size, volume, average sentiment), keywords, DBpedia entities, and a scrollable posts feed.
+\end{itemize}
+
+---
+
+\section{Conclusion}
+This study evaluated the Jannik Sinner and Carlos Alcaraz rivalry on Bluesky during the US Open 2025. 
+
+Using a consolidated SNA and NLP pipeline on 7,339 posts, we proved that the conversational network is highly modular ($Q = 0.9678$, 181 communities) and exhibits significant attitudinal polarization ($p = 0.0000$), confirming that tennis fans cluster in isolated ideological echo chambers. Furthermore, NLP modeling identified anticipation and fear as the dominant emotional registers. 
+
+Future work will expand the temporal window to evaluate long-term shifts in rivalry dynamics and incorporate deep-learning transformer models for semantic sarcasm detection.
+
+\end{document}
