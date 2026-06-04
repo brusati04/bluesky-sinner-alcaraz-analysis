@@ -74,7 +74,7 @@ def generate_visualizations(G, Gd, df_cent, comm_data, centralities, stance_resu
     plt.tight_layout()
     save_plot_copies("network_graph.png")
     plt.close()
-    print("Generated: plots/network_graph.png")
+
 
     # 1.1. Leiden Network Graph
     plt.figure(figsize=(12, 12))
@@ -95,7 +95,7 @@ def generate_visualizations(G, Gd, df_cent, comm_data, centralities, stance_resu
     plt.tight_layout()
     save_plot_copies("leiden_network_graph.png")
     plt.close()
-    print("Generated: plots/leiden_network_graph.png")
+
 
     # 1.2. Infomap Network Graph
     plt.figure(figsize=(12, 12))
@@ -116,7 +116,7 @@ def generate_visualizations(G, Gd, df_cent, comm_data, centralities, stance_resu
     plt.tight_layout()
     save_plot_copies("infomap_network_graph.png")
     plt.close()
-    print("Generated: plots/infomap_network_graph.png")
+
 
     # 1.3. LPA Network Graph
     plt.figure(figsize=(12, 12))
@@ -137,7 +137,7 @@ def generate_visualizations(G, Gd, df_cent, comm_data, centralities, stance_resu
     plt.tight_layout()
     save_plot_copies("lpa_network_graph.png")
     plt.close()
-    print("Generated: plots/lpa_network_graph.png")
+
 
     # 1.4. Fluid Communities (GCC)
     plt.figure(figsize=(12, 12))
@@ -165,7 +165,7 @@ def generate_visualizations(G, Gd, df_cent, comm_data, centralities, stance_resu
     plt.tight_layout()
     save_plot_copies("fluid_network_graph.png")
     plt.close()
-    print("Generated: plots/fluid_network_graph.png")
+
 
     # 1.5. Stance Propagation Graph
     plt.figure(figsize=(12, 12))
@@ -187,7 +187,7 @@ def generate_visualizations(G, Gd, df_cent, comm_data, centralities, stance_resu
     plt.tight_layout()
     save_plot_copies("stance_network_graph.png")
     plt.close()
-    print("Generated: plots/stance_network_graph.png")
+
 
     # 2. Directed Social Network Graph
     plt.figure(figsize=(12, 12))
@@ -222,7 +222,7 @@ def generate_visualizations(G, Gd, df_cent, comm_data, centralities, stance_resu
     plt.tight_layout()
     save_plot_copies("network_graph_directed.png")
     plt.close()
-    print("Generated: plots/network_graph_directed.png")
+
 
     # 3. Sentiment Category Distribution
     plt.figure(figsize=(8, 5))
@@ -243,7 +243,7 @@ def generate_visualizations(G, Gd, df_cent, comm_data, centralities, stance_resu
     plt.tight_layout()
     save_plot_copies("sentiment_distribution.png")
     plt.close()
-    print("Generated: plots/sentiment_distribution.png")
+
 
     # Emotion Distribution Plots
     plot_emotion_distribution(df, output_dir="plots", title_suffix="")
@@ -285,7 +285,7 @@ def generate_visualizations(G, Gd, df_cent, comm_data, centralities, stance_resu
     plt.tight_layout()
     save_plot_copies("sentiment_over_time.png")
     plt.close()
-    print("Generated: plots/sentiment_over_time.png")
+
 
     # 5. Sinner vs Alcaraz Sentiment Comparison
     fig, ax1 = plt.subplots(figsize=(9, 5))
@@ -325,4 +325,4 @@ def generate_visualizations(G, Gd, df_cent, comm_data, centralities, stance_resu
     fig.tight_layout()
     save_plot_copies("rivalry_comparison.png")
     plt.close()
-    print("Generated: plots/rivalry_comparison.png")
+

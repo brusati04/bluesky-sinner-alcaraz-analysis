@@ -148,11 +148,8 @@ def profile_communities(df, cent_df, community_column, emotion_cols):
     return communities
 
 def main():
-    print("=== Loading Consolidated Datasets ===")
     df = pd.read_csv("data/sinner_alcaraz_processed.csv")
     cent_df = pd.read_csv("data/network_centrality_metrics.csv")
-    
-    print(f"Loaded {len(df)} posts and {len(cent_df)} nodes.")
     
     df['created_at'] = pd.to_datetime(df['created_at'], errors='coerce', format='mixed')
     df = df.dropna(subset=['created_at'])
@@ -163,7 +160,7 @@ def main():
     did_to_handle = build_did_to_handle(df)
     
     # Reconstruct Directed Graph Gd to get interactions
-    print("=== Reconstructing Directed Network ===")
+
     G = nx.DiGraph()
     for _, row in df.iterrows():
         src_did = row['author_did']
@@ -192,7 +189,7 @@ def main():
                     else:
                         G.add_edge(source, target, weight=1, relationship="MENTION")
                         
-    print(f"Network has {G.number_of_nodes()} nodes and {G.number_of_edges()} edges.")
+
     
     node_metrics = cent_df.set_index('user').to_dict(orient='index')
     
@@ -250,19 +247,10 @@ def main():
     emotion_cols = [c for c in df.columns if c.startswith('emotion_')]
     
     # Profile all community detection algorithms
-    print("=== Profiling Communities for Louvain ===")
     louvain_comms = profile_communities(df, cent_df, "community", emotion_cols)
-    
-    print("=== Profiling Communities for Leiden ===")
     leiden_comms = profile_communities(df, cent_df, "leiden_community", emotion_cols)
-    
-    print("=== Profiling Communities for Infomap ===")
     infomap_comms = profile_communities(df, cent_df, "infomap_community", emotion_cols)
-    
-    print("=== Profiling Communities for LPA ===")
     lpa_comms = profile_communities(df, cent_df, "lpa_community", emotion_cols)
-    
-    print("=== Profiling Communities for Fluid Communities ===")
     fluid_comms = profile_communities(df, cent_df, "fluid_community_gcc", emotion_cols)
     
     algorithms = {
@@ -306,7 +294,7 @@ def main():
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(dashboard_data, f, indent=2, ensure_ascii=False)
         
-    print(f"=== Successfully exported data to {output_path} ===")
+
 
 if __name__ == "__main__":
     main()

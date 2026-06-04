@@ -31,9 +31,6 @@ def analyze_community_sentiment_polarization(df, G, node_to_community, communiti
     df_valid = df_with_comm[df_with_comm['community_id'].isin(valid_comms)]
 
     n_valid = len(valid_comms)
-    print(f"\n--- Community Sentiment Polarization Analysis{title_suffix} ---")
-    print(f"Communities with >=5 posts: {n_valid} (out of {len(communities)} total)")
-
     if n_valid < 2:
         print("Not enough communities with sufficient posts for polarization analysis.")
         return df
@@ -45,22 +42,11 @@ def analyze_community_sentiment_polarization(df, G, node_to_community, communiti
                            'post_count', 'median_sentiment']
     comm_stats = comm_stats.sort_values('post_count', ascending=False)
 
-    print("\nTop communities by post count with sentiment profiles:")
-    print(comm_stats.head(10).to_string(index=False))
-
     groups = [
         df_valid[df_valid['community_id'] == cid]['sentiment_compound'].values
         for cid in valid_comms
     ]
     kw_stat, kw_p = stats.kruskal(*groups)
-    print(f"\nKruskal-Wallis H-test across {n_valid} communities:")
-    print(f"  H = {kw_stat:.4f}, p = {kw_p:.4f}")
-    if kw_p < 0.05:
-        print("  -> Statistically significant sentiment differences across communities (p < 0.05).")
-        print("  -> This provides evidence of attitudinal polarization between sub-communities.")
-    else:
-        print("  -> No statistically significant sentiment polarization found (p >= 0.05).")
-        print("  -> Communities are structurally separate but NOT sentimentally polarized.")
 
     suffix_filename = title_suffix.replace(' ', '_').replace('(', '').replace(')', '')
     comm_stats.to_csv(
@@ -90,13 +76,13 @@ def analyze_community_sentiment_polarization(df, G, node_to_community, communiti
     plt.savefig(os.path.join(output_dir, fname), dpi=300)
     plt.savefig(os.path.join("report", fname), dpi=300)
     plt.close()
-    print(f"Generated: {os.path.join(output_dir, fname)}")
+
 
     return df
 
 
 def run_nlp_enrichment(df, output_filepath="data/sinner_alcaraz_processed.csv"):
-    print("\n--- PHASE 3: Natural Language Processing ---")
+
 
     df = df.copy()
     df['cleaned_text'] = df['text'].apply(clean_text)
@@ -117,7 +103,7 @@ def run_nlp_enrichment(df, output_filepath="data/sinner_alcaraz_processed.csv"):
     dbpedia_cache = {}
     state = {"circuit_broken": False, "broken_at": 0.0, "cooldown_seconds": 60}
 
-    print("Executing Named Entity Linking via DBpedia Spotlight...")
+
     df['linked_entities'] = df.apply(lambda r: link_entities_dbpedia(r, dbpedia_cache, state), axis=1)
 
     all_uris = []
@@ -129,9 +115,7 @@ def run_nlp_enrichment(df, output_filepath="data/sinner_alcaraz_processed.csv"):
         uri_df = pd.DataFrame(all_uris, columns=['uri', 'surface_form'])
         top_linked = uri_df.groupby(['uri', 'surface_form']).size().reset_index(name='count')
         top_linked = top_linked.sort_values(by='count', ascending=False).head(15)
-        print("\n--- Top Linked Entities (DBpedia Spotlight NEL) ---")
-        for idx, r in top_linked.iterrows():
-            print(f"- {r['surface_form']} ({r['uri']}): {r['count']} mentions")
+
 
     # Correlate Sentiment via Named Entity Linking (NEL)
     sinner_scores = []
@@ -156,7 +140,7 @@ def run_nlp_enrichment(df, output_filepath="data/sinner_alcaraz_processed.csv"):
             alcaraz_scores.append(comp)
 
     df.to_csv(output_filepath, index=False)
-    print(f"Enriched NLP features saved to {output_filepath}")
+
     
     return {
         "df": df,

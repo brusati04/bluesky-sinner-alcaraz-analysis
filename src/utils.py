@@ -19,7 +19,6 @@ import html
 
 
 
-# --- Download NLTK Resources Defensively ---
 for _resource in ['stopwords', 'punkt', 'punkt_tab']:
     try:
         nltk.data.find(f'corpora/{_resource}' if _resource == 'stopwords' else f'tokenizers/{_resource}')
@@ -262,7 +261,6 @@ def save_plot_copies(filename):
 
 
 def load_and_preprocess_data(filepath="data/sinner_alcaraz_posts.csv"):
-    print("\n=== Consolidated SNA & NLP Pipeline: Loading Data ===")
     os.makedirs("data", exist_ok=True)
     os.makedirs("plots", exist_ok=True)
     os.makedirs("report", exist_ok=True)
@@ -273,8 +271,6 @@ def load_and_preprocess_data(filepath="data/sinner_alcaraz_posts.csv"):
         print(f"Error: {filepath} not found! Run the crawler first.")
         return None, None
 
-    print(f"Successfully loaded {len(df)} posts.")
-
     df['created_at'] = pd.to_datetime(df['created_at'], errors='coerce', format='mixed')
     df = df.dropna(subset=['created_at'])
 
@@ -283,6 +279,5 @@ def load_and_preprocess_data(filepath="data/sinner_alcaraz_posts.csv"):
     df['links'] = df['links'].apply(parse_list_col)
 
     did_to_handle = build_did_to_handle(df)
-    print(f"Mapped {len(did_to_handle)} unique author DIDs to Handles.")
     return df, did_to_handle
 

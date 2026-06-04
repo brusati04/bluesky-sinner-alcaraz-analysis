@@ -2,7 +2,7 @@ import pandas as pd
 import networkx as nx
 
 def build_networks(df, did_to_handle):
-    print("\n--- PHASE 2: Graph Modelling & SNA (Undirected & Directed) ---")
+
     G = nx.Graph()
     Gd = nx.DiGraph()
 
@@ -45,8 +45,7 @@ def build_networks(df, did_to_handle):
                     else:
                         Gd.add_edge(source, target, weight=1, relationship="MENTION")
 
-    print(f"Undirected Network: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges.")
-    print(f"Directed Network: {Gd.number_of_nodes()} nodes, {Gd.number_of_edges()} edges.")
+
     return G, Gd
 
 
@@ -115,8 +114,7 @@ def run_community_detection(G, Gd):
     # Louvain Method (Undirected)
     communities = nx.community.louvain_communities(G)
     modularity_score = nx.community.modularity(G, communities)
-    print(f"Louvain Community Detection (on G) found: {len(communities)} communities.")
-    print(f"Graph Modularity (Q): {modularity_score:.4f}")
+
 
     node_to_community = {}
     for i, comm in enumerate(communities):
@@ -126,7 +124,7 @@ def run_community_detection(G, Gd):
     nx.set_node_attributes(Gd, node_to_community, "community")
 
     # 1. Leiden Algorithm (Undirected G)
-    print("\n--- Running Leiden Algorithm ---")
+
     try:
         import igraph as ig
         import leidenalg
@@ -160,8 +158,7 @@ def run_community_detection(G, Gd):
         
         leiden_communities = [set(c) for c in leiden_communities_list]
         leiden_modularity = nx.community.modularity(G, leiden_communities)
-        print(f"Leiden Community Detection found: {len(leiden_communities)} communities.")
-        print(f"Leiden Graph Modularity (Q): {leiden_modularity:.4f}")
+
         nx.set_node_attributes(G, node_to_leiden, "leiden_community")
     except Exception as e:
         leiden_communities = []
@@ -170,7 +167,7 @@ def run_community_detection(G, Gd):
         print(f"Error running Leiden: {e}")
 
     # 2. Infomap Algorithm (Directed Gd)
-    print("\n--- Running Infomap Algorithm ---")
+
     try:
         from infomap import Infomap
         
@@ -194,8 +191,7 @@ def run_community_detection(G, Gd):
             
         infomap_communities = [set(c) for c in infomap_comm_map.values()]
         infomap_modularity = nx.community.modularity(G, infomap_communities)
-        print(f"Infomap found: {len(infomap_communities)} communities.")
-        print(f"Infomap Graph Modularity (Q, evaluated on G): {infomap_modularity:.4f}")
+
         nx.set_node_attributes(G, node_to_infomap, "infomap_community")
     except Exception as e:
         infomap_communities = []
@@ -204,7 +200,7 @@ def run_community_detection(G, Gd):
         print(f"Error running Infomap: {e}")
 
     # 3. Label Propagation Algorithm (LPA on G)
-    print("\n--- Running Label Propagation Algorithm ---")
+
     try:
         lpa_communities = list(nx.community.label_propagation_communities(G))
         lpa_modularity = nx.community.modularity(G, lpa_communities)
@@ -213,8 +209,7 @@ def run_community_detection(G, Gd):
         for comm_id, comm in enumerate(lpa_communities):
             for node in comm:
                 node_to_lpa[node] = comm_id
-        print(f"Label Propagation found: {len(lpa_communities)} communities.")
-        print(f"Label Propagation Modularity (Q): {lpa_modularity:.4f}")
+
         nx.set_node_attributes(G, node_to_lpa, "lpa_community")
     except Exception as e:
         lpa_communities = []
@@ -227,21 +222,10 @@ def run_community_detection(G, Gd):
     gcc = G.subgraph(components[0])
     gcc_size = gcc.number_of_nodes()
     gcc_fraction = gcc_size / G.number_of_nodes()
-    print(f"\n--- Giant Connected Component (GCC) Analysis ---")
-    print(f"GCC size: {gcc_size} nodes ({gcc_fraction*100:.2f}% of N={G.number_of_nodes()})")
     avg_degree = sum(dict(G.degree()).values()) / G.number_of_nodes()
-    print(f"Mean degree <k>: {avg_degree:.3f}")
-    print(f"Phase transition threshold (Erdos-Renyi theory): <k> ~ 1.0")
-    if avg_degree < 1.0:
-        print("  -> Network is BELOW the critical threshold: many isolated components expected.")
-    elif avg_degree < 2.0:
-        print(f"  -> Network is ABOVE threshold (<k>={avg_degree:.3f} > 1.0): GCC emergence is expected.")
-        print(f"  -> GCC of {gcc_fraction*100:.1f}% is consistent with early post-transition behaviour.")
-    else:
-        print(f"  -> Network is well connected (<k>={avg_degree:.3f}): GCC dominance expected.")
 
     # 4. Fluid Communities (on GCC)
-    print("\n--- Running Fluid Communities on GCC ---")
+
     k_fluid = 3
     try:
         fluid_communities_list = list(nx.community.asyn_fluidc(gcc, k_fluid, seed=42))
@@ -252,8 +236,7 @@ def run_community_detection(G, Gd):
         for comm_id, comm in enumerate(fluid_communities):
             for node in comm:
                 node_to_fluid[node] = comm_id
-        print(f"Fluid Communities (on GCC, k={k_fluid}) found: {len(fluid_communities)} communities.")
-        print(f"Fluid Communities GCC Modularity (Q): {fluid_modularity:.4f}")
+
         nx.set_node_attributes(gcc, node_to_fluid, "fluid_community")
     except Exception as e:
         fluid_communities = []
@@ -262,24 +245,24 @@ def run_community_detection(G, Gd):
         print(f"Error running Fluid Communities on GCC: {e}")
 
     # Assortativity Analysis
-    print(f"\n--- Assortativity Analysis ---")
+
     try:
         deg_assort_undir = nx.degree_assortativity_coefficient(G)
-        print(f"Undirected Graph degree assortativity (r): {deg_assort_undir:.4f}")
+
     except Exception as e:
         deg_assort_undir = 0.0
         print("Error calculating undirected degree assortativity:", e)
 
     try:
         deg_assort_dir = nx.degree_assortativity_coefficient(Gd)
-        print(f"Directed Graph degree assortativity (r): {deg_assort_dir:.4f}")
+
     except Exception as e:
         deg_assort_dir = 0.0
         print("Error calculating directed degree assortativity:", e)
 
     try:
         comm_assort_undir = nx.attribute_assortativity_coefficient(G, "community")
-        print(f"Undirected Graph community assortativity: {comm_assort_undir:.4f}")
+
     except Exception as e:
         comm_assort_undir = 0.0
         print("Error calculating undirected community assortativity:", e)
@@ -349,5 +332,5 @@ def save_initial_centrality_csv(G, centralities, comm_data, filepath="data/netwo
         })
     df_cent = pd.DataFrame(centrality_data)
     df_cent.to_csv(filepath, index=False)
-    print(f"Combined SNA metrics saved to {filepath}")
+
     return df_cent

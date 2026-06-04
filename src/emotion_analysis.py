@@ -44,7 +44,7 @@ def add_emotion_columns(df: pd.DataFrame, text_col: str = 'cleaned_text') -> pd.
     8 new columns: emotion_fear, emotion_anger, ..., emotion_joy.
     Also adds 'dominant_emotion' column (the highest-scoring emotion per post).
     """
-    print(f"Running NRC Emotion Analysis on {len(df)} posts...")
+
 
     emotion_scores = df[text_col].apply(score_emotions)
     emotion_df = pd.DataFrame(emotion_scores.tolist(), index=df.index)
@@ -59,8 +59,7 @@ def add_emotion_columns(df: pd.DataFrame, text_col: str = 'cleaned_text') -> pd.
     all_zero_mask = df[emotion_cols].sum(axis=1) == 0
     df.loc[all_zero_mask, 'dominant_emotion'] = 'neutral'
 
-    print(f"Emotion analysis complete. Dominant emotion distribution:")
-    print(df['dominant_emotion'].value_counts().to_string())
+
 
     return df
 
@@ -101,7 +100,7 @@ def plot_emotion_distribution(df: pd.DataFrame, output_dir: str,
     plt.savefig(os.path.join(output_dir, fname), dpi=300)
     plt.savefig(os.path.join("report", fname), dpi=300)
     plt.close()
-    print(f"Generated: {os.path.join(output_dir, fname)}")
+
 
     # --- Plot 2: Sinner vs Alcaraz emotion comparison ---
     sinner_mask = df['text'].str.lower().str.contains('sinner|jannik', na=False)
@@ -129,21 +128,9 @@ def plot_emotion_distribution(df: pd.DataFrame, output_dir: str,
     plt.savefig(os.path.join(output_dir, fname2), dpi=300)
     plt.savefig(os.path.join("report", fname2), dpi=300)
     plt.close()
-    print(f"Generated: {os.path.join(output_dir, fname2)}")
+
 
 
 def print_emotion_summary(df: pd.DataFrame) -> None:
     """Print a structured summary of the emotion analysis results."""
-    emotion_cols = [f'emotion_{e}' for e in NRC_EMOTIONS]
-
-    print("\n--- NRC Emotion Analysis Summary ---")
-    print(f"{'Emotion':<15} {'Mean Score':>12} {'% Posts w/ signal':>18}")
-    print("-" * 47)
-    for col in emotion_cols:
-        emotion = col.replace('emotion_', '')
-        mean_score = df[col].mean()
-        pct_nonzero = (df[col] > 0).mean() * 100
-        print(f"{emotion:<15} {mean_score:>12.4f} {pct_nonzero:>17.1f}%")
-
-    print(f"\nDominant Emotion Distribution:")
-    print(df['dominant_emotion'].value_counts().to_string())
+    pass

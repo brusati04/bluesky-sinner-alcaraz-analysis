@@ -9,7 +9,6 @@ from atproto_client.exceptions import RequestException
 
 load_dotenv()  # Load from .env file if present
 
-# --- Credentials ---
 HANDLE = os.environ.get("BSKY_HANDLE")
 APP_PASSWORD = os.environ.get("BSKY_APP_PASSWORD")
 
@@ -20,11 +19,9 @@ if not HANDLE or not APP_PASSWORD:
         "or create a .env file. See .env.example for the required format."
     )
 
-# --- Initialize Client & Login ---
 client = Client()
 try:
     client.login(HANDLE, APP_PASSWORD)
-    print("Logged in as:", HANDLE)
 except Exception as e:
     print(f"Error logging in: {e}")
     raise e
@@ -166,21 +163,7 @@ def search_posts_time_window(
         cursor = res.cursor
         posts = res.posts or []
         if not posts:
-            if print_every_page:
-                print(f"[page {page}] no posts, stopping.")
             break
-
-        if print_every_page:
-            dts = []
-            for p in posts:
-                created = getattr(getattr(p, 'record', None), 'created_at', None)
-                if created:
-                    dts.append(_parse_dt_utc(created))
-            if dts:
-                print(
-                    f"[page {page}] newest={max(dts).isoformat()}  oldest={min(dts).isoformat()}  "
-                    f"collected={len(rows)}  cursor={'yes' if cursor else 'no'}"
-                )
 
         for p in posts:
             rec = getattr(p, "record", None)
@@ -193,11 +176,7 @@ def search_posts_time_window(
                 continue
 
             author = getattr(p, "author", None)
-
-            # Extract facets (mentions, tags, links)
             facets_data = extract_facets(rec)
-            
-            # Extract reply details (including parsing parent user DID)
             reply_data = get_reply_details(rec)
 
             rows.append({
@@ -223,8 +202,6 @@ def search_posts_time_window(
                 break
 
         if cursor is None:
-            if print_every_page:
-                print(f"[page {page}] cursor is None, stopping.")
             break
 
         time.sleep(polite_sleep)
@@ -260,8 +237,6 @@ def search_posts_day_by_day(
         day_since_str = current_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
         day_until_str = next_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
         
-        print(f"\n--- Crawling day: {current_dt.strftime('%Y-%m-%d')} ({day_since_str} to {day_until_str}) ---")
-        
         df_day = search_posts_time_window(
             client=client,
             query=query,
@@ -283,29 +258,19 @@ def search_posts_day_by_day(
     return pd.DataFrame()
 
 
-# --- Execution of Data Collection ---
 if __name__ == "__main__":
-    print("\n--- Phase 1: Data Collection starting ---")
-    
-    # Define the US Open 2025 window (Aug 24, 2025 to Sept 8, 2025)
-    # Adding days before and after to capture the hype and the "day after" analysis
     since_iso = "2025-08-21T00:00:00.000Z"
     until_iso = "2025-09-10T00:00:00.000Z"
     
-    # Run two separate focused queries
     QUERIES = {
         "sinner": '(jannik | sinner) (tennis | usopen | "us open" | alcaraz | slam | match)',
         "alcaraz": 'alcaraz (tennis | usopen | "us open" | sinner | slam | match)',
     }
     
-    MAX_POSTS_PER_DAY = 5000  # Max posts per query per day
+    MAX_POSTS_PER_DAY = 5000
     
     df_list = []
     for query_name, query_str in QUERIES.items():
-        print(f"\n==================================================")
-        print(f" Starting day-by-day crawl for query '{query_name}': {query_str}")
-        print(f"==================================================")
-        
         df_q = search_posts_day_by_day(
             client=client,
             query=query_str,
@@ -322,28 +287,12 @@ if __name__ == "__main__":
             
     if df_list:
         df_all = pd.concat(df_list, ignore_index=True)
-        
-        # Deduplicate based on post URI
         df_all["in_both"] = df_all.duplicated(subset="uri", keep=False)
         df_all = df_all.drop_duplicates(subset="uri", keep="first")
-        
-        # Sort by creation time
         df_all = df_all.sort_values("created_at", ascending=True).reset_index(drop=True)
         
-        print(f"\nCollected {len(df_all)} unique posts in total.")
-        
-        # Create output directories if not exist
         os.makedirs("data", exist_ok=True)
-        
-        # Save to CSV in the data folder
         output_file = "data/sinner_alcaraz_posts.csv"
         df_all.to_csv(output_file, index=False)
-        print(f"Dataset successfully saved to: {output_file}")
-        
-        # Display small sample summary
-        print("\nDataset Summary statistics:")
-        print(f"Total Unique Authors: {df_all['author_did'].nunique()}")
-        print(f"Total Replies Recorded: {df_all['reply_parent_did'].notna().sum()}")
-        print(f"Total Mentions Recorded: {df_all['mentions'].apply(len).sum()}")
     else:
         print("No posts found. Please verify query or dates.")

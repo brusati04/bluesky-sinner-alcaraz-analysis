@@ -3,7 +3,7 @@ import networkx as nx
 import ast
 
 def run_stance_propagation(df, G, Gd, df_cent, filepath="data/network_centrality_metrics.csv"):
-    print("\n--- Stance Propagation Analysis ---")
+
     
     # 1. Compute post-level stance
     post_stances = []
@@ -101,17 +101,17 @@ def run_stance_propagation(df, G, Gd, df_cent, filepath="data/network_centrality
     df_cent['stance_score'] = df_cent['user'].map(f_prop)
     df_cent['stance_leaning'] = df_cent['user'].map(stance_leanings)
     df_cent.to_csv(filepath, index=False)
-    print(f"Updated centrality metrics with stance propagation saved to {filepath}")
+
     
     # Print stats and compute assortativity
     sinner_count = sum(1 for l in stance_leanings.values() if l == "sinner")
     alcaraz_count = sum(1 for l in stance_leanings.values() if l == "alcaraz")
     neutral_count = sum(1 for l in stance_leanings.values() if l == "neutral")
-    print(f"Stance classification results: Sinner fans={sinner_count}, Alcaraz fans={alcaraz_count}, Neutral={neutral_count}")
+
     
     try:
         stance_assort = nx.attribute_assortativity_coefficient(G, "stance_leaning")
-        print(f"Stance Leaning Assortativity Coefficient: {stance_assort:.4f}")
+
     except Exception as e:
         stance_assort = 0.0
         print("Error calculating stance assortativity:", e)
