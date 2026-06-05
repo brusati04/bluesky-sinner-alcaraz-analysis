@@ -296,6 +296,23 @@ def save_initial_centrality_csv(Gu, centralities, comm_data, filepath="data/netw
     return df_cent
 
 
+def get_community_color_map(node_to_community):
+    from collections import Counter
+    counts = Counter(node_to_community.values())
+    sorted_comm_ids = [cid for cid, count in counts.most_common()]
+    
+    # 5 clear, visible, distinct colors (Teal, Orange, Purple, Dark Blue, Red)
+    palette = ["#1abc9c", "#e67e22", "#9b59b6", "#34495e", "#e74c3c"]
+    
+    color_map = {}
+    for idx, cid in enumerate(sorted_comm_ids):
+        if idx < len(palette):
+            color_map[cid] = palette[idx]
+        else:
+            color_map[cid] = "#bdc3c7"
+    return color_map
+
+
 def get_filtered_networks(Gu, Gd, min_component_size=10):
     Gu_filtered = Gu.copy()
     for component in list(nx.connected_components(Gu_filtered)):
@@ -362,14 +379,8 @@ def plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities, stance_results
 
     # 1. Louvain Network Graph
     plt.figure(figsize=(12, 12))
-    node_colors = []
-    if len(subG.nodes()) > 1 and len(communities) > 0:
-        cmap = plt.cm.get_cmap('tab20', len(communities))
-        for node in subG.nodes():
-            comm_id = node_to_community.get(node, 0)
-            node_colors.append(cmap(comm_id))
-    else:
-        node_colors = '#3A6073'
+    louvain_color_map = get_community_color_map(node_to_community)
+    node_colors = [louvain_color_map.get(node_to_community.get(node, 0), "#bdc3c7") for node in subG.nodes()]
         
     node_sizes = [50 + (deg_cent[node] * 1200) for node in subG.nodes()]
     nx.draw_networkx_edges(subG, pos, alpha=0.15, edge_color="grey")
@@ -410,18 +421,12 @@ def plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities, stance_results
         if pos_dir is None:
             pos_dir = nx.spring_layout(subG_dir, k=0.15, iterations=40, seed=42)
 
-        node_colors_dir = []
         infomap_communities = comm_data.get("infomap_communities", [])
         node_to_infomap = comm_data.get("node_to_infomap", {})
         infomap_modularity = comm_data.get("infomap_modularity", 0.0)
 
-        if len(subG_dir.nodes()) > 1 and len(infomap_communities) > 0:
-            cmap = plt.cm.get_cmap('tab20', len(infomap_communities))
-            for node in subG_dir.nodes():
-                comm_id = node_to_infomap.get(node, 0)
-                node_colors_dir.append(cmap(comm_id % len(infomap_communities)))
-        else:
-            node_colors_dir = '#3A6073'
+        infomap_color_map = get_community_color_map(node_to_infomap)
+        node_colors_dir = [infomap_color_map.get(node_to_infomap.get(node, 0), "#bdc3c7") for node in subG_dir.nodes()]
 
         node_sizes_dir = [50 + (pagerank.get(node, 0.0) * 18000) for node in subG_dir.nodes()]
         nx.draw_networkx_edges(subG_dir, pos_dir, alpha=0.2, edge_color="grey",

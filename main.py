@@ -14,11 +14,15 @@ from social_network_analysis import (build_networks, calculate_centralities,
                                       run_community_detection, save_initial_centrality_csv,
                                       plot_network_graphs, plot_filtered_network_graph,
                                       get_filtered_networks)
-from social_sentiment_analysis import (run_nlp_enrichment, analyze_community_sentiment_polarization,
+from social_sentiment_analysis import (run_nlp_enrichment,
                                         run_stance_propagation, plot_emotion_distribution,
                                         plot_sentiment_distribution, plot_sentiment_over_time,
                                         plot_rivalry_comparison, plot_median_sentiment_over_rounds,
-                                        plot_fanbase_wordclouds)
+                                        plot_fanbase_wordclouds,
+                                        analyze_community_echo_chambers,
+                                        plot_community_emotion_profiles,
+                                        plot_community_aspect_sentiment,
+                                        plot_subjectivity_vs_centrality)
 import export_dashboard_data
 
 def main():
@@ -78,34 +82,32 @@ def main():
     comm_data = run_community_detection(Gu, Gd)
     df_cent = save_initial_centrality_csv(Gu, centralities, comm_data, filepath="data/network_centrality_metrics.csv")
 
+    # Run stance propagation first to attach user leanings to network nodes
+    stance_results = run_stance_propagation(df_processed, Gu, Gd, df_cent, filepath="data/network_centrality_metrics.csv")
+
     # Retrieve filtered subgraphs (aligned with the plots in the 'filtered' folder)
     Gu_filtered, Gd_filtered = get_filtered_networks(Gu, Gd, min_component_size=10)
 
-    # 1. Louvain Sentiment Polarization on Full Undirected Graph
-    analyze_community_sentiment_polarization(
-        df_processed, Gu, comm_data["node_to_louvain"], comm_data["louvain_communities"],
-        output_dir="plots", title_suffix=" (Louvain)"
-    )
+    # 1. Study 1: Polarization and Echo Chamber Analysis
+    analyze_community_echo_chambers(df_processed, Gu, comm_data["node_to_louvain"], comm_data["louvain_communities"], output_dir="plots", title_suffix=" (Louvain)")
+    analyze_community_echo_chambers(df_processed, Gd, comm_data["node_to_infomap"], comm_data["infomap_communities"], output_dir="plots", title_suffix=" (Infomap)")
+    analyze_community_echo_chambers(df_processed, Gu_filtered, comm_data["node_to_louvain"], comm_data["louvain_communities"], output_dir="plots", title_suffix=" (Louvain - Filtered)")
+    analyze_community_echo_chambers(df_processed, Gd_filtered, comm_data["node_to_infomap"], comm_data["infomap_communities"], output_dir="plots", title_suffix=" (Infomap - Filtered)")
 
-    # 2. Infomap Sentiment Polarization on Full Directed Graph
-    analyze_community_sentiment_polarization(
-        df_processed, Gd, comm_data["node_to_infomap"], comm_data["infomap_communities"],
-        output_dir="plots", title_suffix=" (Infomap)"
-    )
+    # 2. Study 2: Emotional Profiling of Communities
+    plot_community_emotion_profiles(df_processed, Gu, comm_data["node_to_louvain"], comm_data["louvain_communities"], output_dir="plots", title_suffix=" (Louvain)")
+    plot_community_emotion_profiles(df_processed, Gd, comm_data["node_to_infomap"], comm_data["infomap_communities"], output_dir="plots", title_suffix=" (Infomap)")
+    plot_community_emotion_profiles(df_processed, Gu_filtered, comm_data["node_to_louvain"], comm_data["louvain_communities"], output_dir="plots", title_suffix=" (Louvain - Filtered)")
+    plot_community_emotion_profiles(df_processed, Gd_filtered, comm_data["node_to_infomap"], comm_data["infomap_communities"], output_dir="plots", title_suffix=" (Infomap - Filtered)")
 
-    # 3. Louvain Sentiment Polarization on Filtered Undirected Graph
-    analyze_community_sentiment_polarization(
-        df_processed, Gu_filtered, comm_data["node_to_louvain"], comm_data["louvain_communities"],
-        output_dir="plots", title_suffix=" (Louvain - Filtered)"
-    )
+    # 3. Study 3: Aspect-Based Sentiment Analysis (ABSA)
+    plot_community_aspect_sentiment(df_processed, Gu, comm_data["node_to_louvain"], comm_data["louvain_communities"], output_dir="plots", title_suffix=" (Louvain)")
+    plot_community_aspect_sentiment(df_processed, Gd, comm_data["node_to_infomap"], comm_data["infomap_communities"], output_dir="plots", title_suffix=" (Infomap)")
+    plot_community_aspect_sentiment(df_processed, Gu_filtered, comm_data["node_to_louvain"], comm_data["louvain_communities"], output_dir="plots", title_suffix=" (Louvain - Filtered)")
+    plot_community_aspect_sentiment(df_processed, Gd_filtered, comm_data["node_to_infomap"], comm_data["infomap_communities"], output_dir="plots", title_suffix=" (Infomap - Filtered)")
 
-    # 4. Infomap Sentiment Polarization on Filtered Directed Graph
-    analyze_community_sentiment_polarization(
-        df_processed, Gd_filtered, comm_data["node_to_infomap"], comm_data["infomap_communities"],
-        output_dir="plots", title_suffix=" (Infomap - Filtered)"
-    )
-
-    stance_results = run_stance_propagation(df_processed, Gu, Gd, df_cent, filepath="data/network_centrality_metrics.csv")
+    # 4. Study 4: Subjectivity vs. Objectivity of Influencers
+    plot_subjectivity_vs_centrality(df_processed, stance_results["df_cent"], output_dir="plots")
     
     # Generate network graph visualizations
     plot_network_graphs(Gu, Gd, stance_results["df_cent"], comm_data, centralities, stance_results, output_dir="plots")

@@ -226,12 +226,70 @@ def run_nlp_enrichment(df, output_filepath="data/sinner_alcaraz_processed.csv"):
     }
 
 
-def analyze_community_sentiment_polarization(df, Gu, node_to_community, communities,
-                                              output_dir, title_suffix=""):
+def analyze_community_echo_chambers(df, Gu, node_to_community, communities, output_dir="plots", title_suffix=""):
     """
-    Join community IDs back to post-level data and compare
-    sentiment profiles across communities, filtered by handles in Gu nodes.
+    Study 1: Polarization and Echo Chamber Analysis.
+    Classify community members by their stance leaning and plot distributions.
     """
+    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs("report", exist_ok=True)
+
+    stance_leanings = nx.get_node_attributes(Gu, "stance_leaning")
+
+    user_community = {}
+    for node in Gu.nodes():
+        if node in node_to_community:
+            user_community[node] = node_to_community[node]
+
+    comm_leanings = {}
+    for node, cid in user_community.items():
+        leaning = stance_leanings.get(node, "neutral")
+        if cid not in comm_leanings:
+            comm_leanings[cid] = []
+        comm_leanings[cid].append(leaning)
+
+    top_comms = sorted(comm_leanings.keys(), key=lambda k: len(comm_leanings[k]), reverse=True)[:5]
+
+    plot_data = []
+    for cid in top_comms:
+        counts = pd.Series(comm_leanings[cid]).value_counts()
+        size = len(comm_leanings[cid])
+        plot_data.append({
+            "Community": f"Comm {cid}\n(N={size})",
+            "Pro-Sinner": counts.get("sinner", 0) / size * 100,
+            "Pro-Alcaraz": counts.get("alcaraz", 0) / size * 100,
+            "Neutral": counts.get("neutral", 0) / size * 100
+        })
+    df_plot = pd.DataFrame(plot_data)
+
+    if df_plot.empty:
+        return
+
+    ax = df_plot.plot(x="Community", y=["Pro-Sinner", "Neutral", "Pro-Alcaraz"], kind="bar", stacked=True,
+                      color=["#3498db", "#bdc3c7", "#e67e22"], figsize=(10, 6), edgecolor="white")
+    plt.title(f"User Stance Distribution per Community{title_suffix}\n(Echo Chamber Profile)", fontsize=14, pad=15)
+    plt.xlabel("Community")
+    plt.ylabel("Percentage of Users (%)")
+    plt.xticks(rotation=0)
+    plt.ylim(0, 100)
+    plt.legend(loc="upper right")
+    plt.tight_layout()
+
+    suffix_filename = title_suffix.replace(' ', '_').replace('(', '').replace(')', '')
+    fname = f"community_echo_chambers{suffix_filename}.png"
+    plt.savefig(os.path.join(output_dir, fname), dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join("report", fname), dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def plot_community_emotion_profiles(df, Gu, node_to_community, communities, output_dir="plots", title_suffix=""):
+    """
+    Study 2: Emotional Profiling of Communities.
+    Compare average scores of 8 NRC emotions across the top 3 communities.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs("report", exist_ok=True)
+
     author_community = {}
     for _, row in df.iterrows():
         handle = row.get('author_handle')
@@ -240,64 +298,182 @@ def analyze_community_sentiment_polarization(df, Gu, node_to_community, communit
 
     df = df.copy()
     df['community_id'] = df['author_handle'].map(author_community)
-    df_with_comm = df.dropna(subset=['community_id', 'sentiment_compound']).copy()
-    df_with_comm['community_id'] = df_with_comm['community_id'].astype(int)
+    df_with_comm = df.dropna(subset=['community_id']).copy()
 
-    comm_counts = df_with_comm['community_id'].value_counts()
-    valid_comms = comm_counts[comm_counts >= 5].index.tolist()
-    df_valid = df_with_comm[df_with_comm['community_id'].isin(valid_comms)]
+    comm_sizes = df_with_comm['community_id'].value_counts()
+    top_comms = comm_sizes.head(3).index.tolist()
 
-    n_valid = len(valid_comms)
-    if n_valid < 2:
-        print("Not enough communities with sufficient posts for polarization analysis.")
-        return df
+    emotion_cols = [f'emotion_{e}' for e in NRC_EMOTIONS]
 
-    comm_stats = df_valid.groupby('community_id')['sentiment_compound'].agg(
-        ['mean', 'std', 'count', 'median']
-    ).reset_index()
-    comm_stats.columns = ['community_id', 'mean_sentiment', 'std_sentiment',
-                           'post_count', 'median_sentiment']
-    comm_stats = comm_stats.sort_values('post_count', ascending=False)
+    records = []
+    for cid in top_comms:
+        comm_posts = df_with_comm[df_with_comm['community_id'] == cid]
+        avg_scores = comm_posts[emotion_cols].mean()
+        for col in emotion_cols:
+            emotion = col.replace('emotion_', '')
+            records.append({
+                "Community": f"Comm {int(cid)} (N={len(comm_posts)})",
+                "Emotion": emotion,
+                "Score": avg_scores[col]
+            })
 
-    groups = [
-        df_valid[df_valid['community_id'] == cid]['sentiment_compound'].values
-        for cid in valid_comms
-    ]
-    kw_stat, kw_p = stats.kruskal(*groups)
+    df_plot = pd.DataFrame(records)
+    if df_plot.empty:
+        return
+
+    from social_network_analysis import get_community_color_map
+    color_map = get_community_color_map(node_to_community)
+    custom_palette = {}
+    for cid in top_comms:
+        comm_posts = df_with_comm[df_with_comm['community_id'] == cid]
+        label = f"Comm {int(cid)} (N={len(comm_posts)})"
+        custom_palette[label] = color_map.get(cid, "#bdc3c7")
+
+    plt.figure(figsize=(12, 6))
+    sns.barplot(data=df_plot, x="Emotion", y="Score", hue="Community", palette=custom_palette)
+    plt.title(f"Average Emotion Profiles per Community{title_suffix}\n(NRC Emotion Lexicon)", fontsize=14, pad=15)
+    plt.xlabel("Emotion Category")
+    plt.ylabel("Mean Normalized Score")
+    plt.legend(title="Community")
+    plt.tight_layout()
 
     suffix_filename = title_suffix.replace(' ', '_').replace('(', '').replace(')', '')
-    comm_stats.to_csv(
-        f"data/community_sentiment_stats{suffix_filename}.csv",
-        index=False
-    )
-
-    top_n = min(8, n_valid)
-    top_comm_ids = comm_stats.head(top_n)['community_id'].tolist()
-    df_plot = df_valid[df_valid['community_id'].isin(top_comm_ids)].copy()
-    df_plot['community_label'] = 'Comm ' + df_plot['community_id'].astype(str)
-
-    fig, ax = plt.subplots(figsize=(12, 5))
-    order = ['Comm ' + str(c) for c in top_comm_ids]
-    sns.boxplot(data=df_plot, x='community_label', y='sentiment_compound',
-                order=order, hue='community_label', palette='Set2', legend=False, ax=ax)
-    ax.axhline(0, color='gray', linestyle='--', alpha=0.7, label='Neutral baseline')
-    ax.set_title(
-        f"Sentiment Distribution per Community (Top {top_n} by size){title_suffix}\n"
-        f"Kruskal-Wallis H={kw_stat:.3f}, p={kw_p:.4f}"
-    )
-    if "infomap" in title_suffix.lower():
-        ax.set_xlabel("Community (Infomap partition)")
-    else:
-        ax.set_xlabel("Community (Louvain partition)")
-    ax.set_ylabel("VADER Compound Sentiment Score")
-    ax.legend()
-    plt.tight_layout()
-    fname = f"community_sentiment_polarization{suffix_filename}.png"
+    fname = f"community_emotion_profiles{suffix_filename}.png"
     plt.savefig(os.path.join(output_dir, fname), dpi=300, bbox_inches='tight')
     plt.savefig(os.path.join("report", fname), dpi=300, bbox_inches='tight')
     plt.close()
 
-    return df
+
+def plot_community_aspect_sentiment(df, Gu, node_to_community, communities, output_dir="plots", title_suffix=""):
+    """
+    Study 3: Aspect-Based Sentiment Analysis (ABSA) across Communities.
+    Compare sentiment profiles towards Match Play, controversies, and general rivalry.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs("report", exist_ok=True)
+
+    aspects = {
+        "Match Play/Contest": ["match", "set", "points", "serve", "game", "win", "play", "court"],
+        "Controversies/Doping": ["doping", "clostebol", "test", "ban", "steroid", "innocent", "guilty", "controversy"],
+        "Player Rivalry": ["rivalry", "rival", "face-off", "vs", "versus"]
+    }
+
+    df = df.copy()
+
+    for name, keywords in aspects.items():
+        pattern = "|".join(keywords)
+        df[name] = df['text'].str.lower().str.contains(pattern, na=False)
+
+    author_community = {}
+    for _, row in df.iterrows():
+        handle = row.get('author_handle')
+        if handle and handle in node_to_community and handle in Gu.nodes():
+            author_community[handle] = node_to_community[handle]
+
+    df['community_id'] = df['author_handle'].map(author_community)
+    df_with_comm = df.dropna(subset=['community_id', 'sentiment_compound']).copy()
+
+    comm_sizes = df_with_comm['community_id'].value_counts()
+    top_comms = comm_sizes.head(3).index.tolist()
+
+    records = []
+    for cid in top_comms:
+        comm_posts = df_with_comm[df_with_comm['community_id'] == cid]
+        for aspect_name in aspects.keys():
+            aspect_posts = comm_posts[comm_posts[aspect_name]]
+            if len(aspect_posts) >= 2:
+                records.append({
+                    "Community": f"Comm {int(cid)} (N={len(comm_posts)})",
+                    "Aspect": aspect_name,
+                    "Avg Sentiment": aspect_posts["sentiment_compound"].mean(),
+                    "Count": len(aspect_posts)
+                })
+
+    df_plot = pd.DataFrame(records)
+    if df_plot.empty:
+        return
+
+    from social_network_analysis import get_community_color_map
+    color_map = get_community_color_map(node_to_community)
+    custom_palette = {}
+    for cid in top_comms:
+        comm_posts = df_with_comm[df_with_comm['community_id'] == cid]
+        label = f"Comm {int(cid)} (N={len(comm_posts)})"
+        custom_palette[label] = color_map.get(cid, "#bdc3c7")
+
+    plt.figure(figsize=(10, 6))
+    ax = sns.barplot(data=df_plot, x="Aspect", y="Avg Sentiment", hue="Community", palette=custom_palette)
+    ax.axhline(0, color='gray', linestyle='--', alpha=0.7)
+    plt.title(f"Aspect-Based Sentiment per Community{title_suffix}\n(Comparison across Core Topics)", fontsize=14, pad=15)
+    plt.xlabel("Aspect Topic")
+    plt.ylabel("Mean VADER Compound Sentiment")
+    plt.ylim(-1, 1)
+    plt.legend(title="Community")
+    plt.tight_layout()
+
+    suffix_filename = title_suffix.replace(' ', '_').replace('(', '').replace(')', '')
+    fname = f"community_aspect_sentiment{suffix_filename}.png"
+    plt.savefig(os.path.join(output_dir, fname), dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join("report", fname), dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def plot_subjectivity_vs_centrality(df, df_cent, output_dir="plots"):
+    """
+    Study 4: Subjectivity vs. Objectivity of Influencers and Hubs.
+    Linguistically scores subjectivity and correlates it with PageRank centrality.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs("report", exist_ok=True)
+
+    from preprocessing import nlp
+
+    def get_subjectivity_ratio(text):
+        if not text or pd.isna(text) or str(text).strip() == "":
+            return 0.0
+        doc = nlp(str(text))
+        pos_tags = [token.pos_ for token in doc]
+        if not pos_tags:
+            return 0.0
+        adj_adv = sum(1 for tag in pos_tags if tag in ["ADJ", "ADV"])
+        return adj_adv / len(pos_tags)
+
+    df = df.copy()
+    df["subjectivity"] = df["text"].apply(get_subjectivity_ratio)
+
+    user_subj = df.groupby("author_handle")["subjectivity"].mean().to_dict()
+
+    df_merged = df_cent.copy()
+    df_merged["subjectivity"] = df_merged["user"].map(user_subj).fillna(0.0)
+
+    df_merged = df_merged[df_merged["user"].isin(user_subj.keys())].copy()
+
+    if df_merged.empty:
+        return
+
+    pr_scores = df_merged["pagerank"]
+    subj_scores = df_merged["subjectivity"]
+
+    try:
+        corr_coef, p_val = stats.pearsonr(pr_scores, subj_scores)
+    except Exception:
+        corr_coef, p_val = 0.0, 1.0
+
+    plt.figure(figsize=(9, 6))
+    ax = sns.regplot(data=df_merged, x="pagerank", y="subjectivity",
+                     scatter_kws={"alpha": 0.6, "color": "#1abc9c"},
+                     line_kws={"color": "#e74c3c", "linewidth": 2})
+    ax.set_xscale('log')
+    plt.title(f"User Subjectivity vs. PageRank Influence\n(Pearson r={corr_coef:.4f}, p={p_val:.4f})", fontsize=14, pad=15)
+    plt.xlabel("PageRank Influence (Log Scale)")
+    plt.ylabel("Linguistic Subjectivity Ratio\n(ADJ + ADV / Total Tokens)")
+    plt.grid(True, which="both", ls="--", alpha=0.5)
+    plt.tight_layout()
+
+    fname = "subjectivity_vs_centrality.png"
+    plt.savefig(os.path.join(output_dir, fname), dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join("report", fname), dpi=300, bbox_inches='tight')
+    plt.close()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # STANCE PROPAGATION
