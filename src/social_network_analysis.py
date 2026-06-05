@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from utils import save_plot_copies
 
 def build_networks(df, did_to_handle):
-    G = nx.Graph()
+    Gu = nx.Graph()
     Gd = nx.DiGraph()
 
     for _, row in df.iterrows():
@@ -14,47 +14,47 @@ def build_networks(df, did_to_handle):
             continue
         source = did_to_handle.get(src_did, src_did)
 
-        # A. Add reply relations
+        # Add reply relations
         parent_did = row['reply_parent_did']
         if pd.notna(parent_did):
             target = did_to_handle.get(parent_did, parent_did)
             if source != target: # Avoid self-replies
                 # Undirected
-                if G.has_edge(source, target):
-                    G[source][target]['weight'] += 1
+                if Gu.has_edge(source, target):
+                    Gu[source][target]['weight'] += 1
                 else:
-                    G.add_edge(source, target, weight=1, relationship="REPLY")
+                    Gu.add_edge(source, target, weight=1, relationship="REPLY")
                 # Directed
                 if Gd.has_edge(source, target):
                     Gd[source][target]['weight'] += 1
                 else:
                     Gd.add_edge(source, target, weight=1, relationship="REPLY")
 
-        # B. Add mention relations
+        # Add mention relations
         for m in row['mentions']:
             m_did = m.get('did') if isinstance(m, dict) else m
             if m_did:
                 target = did_to_handle.get(m_did, m_did)
                 if source != target: # Avoid self-mentions
                     # Undirected
-                    if G.has_edge(source, target):
-                        G[source][target]['weight'] += 1
+                    if Gu.has_edge(source, target):
+                        Gu[source][target]['weight'] += 1
                     else:
-                        G.add_edge(source, target, weight=1, relationship="MENTION")
+                        Gu.add_edge(source, target, weight=1, relationship="MENTION")
                     # Directed
                     if Gd.has_edge(source, target):
                         Gd[source][target]['weight'] += 1
                     else:
                         Gd.add_edge(source, target, weight=1, relationship="MENTION")
 
-    return G, Gd
+    return Gu, Gd
 
 
-def calculate_centralities(G, Gd):
+def calculate_centralities(Gu, Gd):
     # Calculate Centrality Metrics for Undirected Graph
-    deg_cent = nx.degree_centrality(G)
-    close_cent = nx.closeness_centrality(G)
-    between_cent = nx.betweenness_centrality(G)
+    deg_cent = nx.degree_centrality(Gu)
+    close_cent = nx.closeness_centrality(Gu)
+    between_cent = nx.betweenness_centrality(Gu)
 
     # Calculate Centrality Metrics for Directed Graph
     in_deg_cent = nx.in_degree_centrality(Gd)
@@ -68,9 +68,9 @@ def calculate_centralities(G, Gd):
         pagerank = {node: 0.0 for node in Gd.nodes()}
 
     # Set attributes
-    nx.set_node_attributes(G, deg_cent, "degree_centrality")
-    nx.set_node_attributes(G, close_cent, "closeness_centrality")
-    nx.set_node_attributes(G, between_cent, "betweenness_centrality")
+    nx.set_node_attributes(Gu, deg_cent, "degree_centrality")
+    nx.set_node_attributes(Gu, close_cent, "closeness_centrality")
+    nx.set_node_attributes(Gu, between_cent, "betweenness_centrality")
 
     return {
         "deg_cent": deg_cent,
@@ -84,47 +84,87 @@ def calculate_centralities(G, Gd):
     }
 
 
-def run_community_detection(G, Gd):
-    if len(G.nodes()) <= 1:
+def run_community_detection(Gu, Gd):
+    if len(Gu.nodes()) <= 1:
         print("Graph too small for community detection / GCC calculation.")
         return {
-            "communities": [list(G.nodes())],
+            "communities": [list(Gu.nodes())],
             "modularity_score": 0.0,
             "node_to_community": {},
             "infomap_communities": [],
             "infomap_modularity": 0.0,
             "node_to_infomap": {},
-            "gcc": G,
-            "gcc_size": len(G.nodes()),
-            "gcc_fraction": 1.0 if len(G.nodes()) > 0 else 0.0,
+            "gcc": Gu,
+            "gcc_size": len(Gu.nodes()),
+            "gcc_fraction": 1.0 if len(Gu.nodes()) > 0 else 0.0,
             "deg_assort_undir": 0.0,
             "deg_assort_dir": 0.0,
             "comm_assort_undir": 0.0
         }
 
-    # Louvain Method (Undirected)
-    communities = nx.community.louvain_communities(G)
-    modularity_score = nx.community.modularity(G, communities)
+    # 1. Louvain Method (Undirected)
+    communities = nx.community.louvain_communities(Gu)
+    modularity_score = nx.community.modularity(Gu, communities)
 
     node_to_community = {}
     for i, comm in enumerate(communities):
         for node in comm:
             node_to_community[node] = i
-    nx.set_node_attributes(G, node_to_community, "community")
+    nx.set_node_attributes(Gu, node_to_community, "community")
     nx.set_node_attributes(Gd, node_to_community, "community")
 
+    # 2. Infomap Method (Directed Flow)
+    import infomap
+    im = infomap.Infomap("--two-level --silent")
+    
+    # Map node names to integer IDs for the C++ Infomap engine
+    node_to_id = {node: idx for idx, node in enumerate(Gd.nodes())}
+    id_to_node = {idx: node for node, idx in node_to_id.items()}
+    
+    for u, v, data in Gd.edges(data=True):
+        im.add_link(node_to_id[u], node_to_id[v], float(data.get('weight', 1.0)))
+        
+    im.run()
+    
+    node_to_infomap = {}
+    infomap_communities_dict = {}
+    for node_it in im.iterLeafNodes():
+        n_id = node_it.physicalId
+        m_id = node_it.module_id
+        if n_id in id_to_node:
+            orig_node = id_to_node[n_id]
+            node_to_infomap[orig_node] = m_id
+            if m_id not in infomap_communities_dict:
+                infomap_communities_dict[m_id] = []
+            infomap_communities_dict[m_id].append(orig_node)
+            
+    # Assign default/fallback community ID for any isolated nodes that Infomap might skip
+    for node in Gd.nodes():
+        if node not in node_to_infomap:
+            node_to_infomap[node] = -1
+            
+    infomap_communities = [set(nodes) for nodes in infomap_communities_dict.values()]
+    
+    try:
+        infomap_modularity = nx.community.modularity(Gd, infomap_communities)
+    except Exception:
+        infomap_modularity = 0.0
+        
+    nx.set_node_attributes(Gu, node_to_infomap, "community_infomap")
+    nx.set_node_attributes(Gd, node_to_infomap, "community_infomap")
+
     # Global Graph Statistics
-    density = nx.density(G)
-    transitivity = nx.transitivity(G)
-    avg_clustering = nx.average_clustering(G)
+    density = nx.density(Gu)
+    transitivity = nx.transitivity(Gu)
+    avg_clustering = nx.average_clustering(Gu)
 
-    # Compute Giant Connected Component (GCC) on G
-    components = sorted(nx.connected_components(G), key=len, reverse=True)
-    gcc = G.subgraph(components[0])
+    # Compute Giant Connected Component (GCC) on Gu
+    components = sorted(nx.connected_components(Gu), key=len, reverse=True)
+    gcc = Gu.subgraph(components[0])
     gcc_size = gcc.number_of_nodes()
-    gcc_fraction = gcc_size / G.number_of_nodes()
+    gcc_fraction = gcc_size / Gu.number_of_nodes()
 
-    # GCC statistics: Average shortest path, diameter, radius, eccentricity (Lab 3)
+    # GCC statistics: Average shortest path, diameter, radius, eccentricity
     if gcc_size > 1:
         try:
             gcc_avg_path_length = nx.average_shortest_path_length(gcc)
@@ -150,7 +190,7 @@ def run_community_detection(G, Gd):
         max_ecc = 0.0
 
     print("\n" + "=" * 50)
-    print("GLOBAL SOCIAL NETWORK STATISTICS (Lab 3)")
+    print("GLOBAL SOCIAL NETWORK STATISTICS")
     print("=" * 50)
     print(f"Network Density:                    {density:.6f}")
     print(f"Network Transitivity:               {transitivity:.6f}")
@@ -159,6 +199,8 @@ def run_community_detection(G, Gd):
     print(f"GCC Average Shortest Path Length:   {gcc_avg_path_length:.4f}")
     print(f"GCC Diameter (Max Eccentricity):    {gcc_diameter:.1f}")
     print(f"GCC Radius (Min Eccentricity):      {gcc_radius:.1f}")
+    print(f"Louvain Communities:                {len(communities)} (Modularity Q: {modularity_score:.4f})")
+    print(f"Infomap Communities:                {len(infomap_communities)} (Modularity Q: {infomap_modularity:.4f})")
     print("=" * 50)
 
     # Save metrics to CSV
@@ -168,12 +210,14 @@ def run_community_detection(G, Gd):
             "Metric": [
                 "Density", "Transitivity", "Average Clustering", 
                 "GCC Size", "GCC Fraction", "GCC Avg Path Length", 
-                "GCC Diameter", "GCC Radius", "GCC Min Eccentricity", "GCC Max Eccentricity"
+                "GCC Diameter", "GCC Radius", "GCC Min Eccentricity", "GCC Max Eccentricity",
+                "Louvain Modularity", "Infomap Modularity"
             ],
             "Value": [
                 density, transitivity, avg_clustering, 
                 gcc_size, gcc_fraction, gcc_avg_path_length, 
-                gcc_diameter, gcc_radius, min_ecc, max_ecc
+                gcc_diameter, gcc_radius, min_ecc, max_ecc,
+                modularity_score, infomap_modularity
             ]
         })
         stats_df.to_csv("data/network_global_metrics.csv", index=False)
@@ -182,7 +226,7 @@ def run_community_detection(G, Gd):
 
     # Assortativity Analysis
     try:
-        deg_assort_undir = nx.degree_assortativity_coefficient(G)
+        deg_assort_undir = nx.degree_assortativity_coefficient(Gu)
     except Exception as e:
         deg_assort_undir = 0.0
         print("Error calculating undirected degree assortativity:", e)
@@ -194,7 +238,7 @@ def run_community_detection(G, Gd):
         print("Error calculating directed degree assortativity:", e)
 
     try:
-        comm_assort_undir = nx.attribute_assortativity_coefficient(G, "community")
+        comm_assort_undir = nx.attribute_assortativity_coefficient(Gu, "community")
     except Exception as e:
         comm_assort_undir = 0.0
         print("Error calculating undirected community assortativity:", e)
@@ -203,9 +247,9 @@ def run_community_detection(G, Gd):
         "communities": communities,
         "modularity_score": modularity_score,
         "node_to_community": node_to_community,
-        "infomap_communities": [],
-        "infomap_modularity": 0.0,
-        "node_to_infomap": {},
+        "infomap_communities": infomap_communities,
+        "infomap_modularity": infomap_modularity,
+        "node_to_infomap": node_to_infomap,
         "gcc": gcc,
         "gcc_size": gcc_size,
         "gcc_fraction": gcc_fraction,
@@ -215,7 +259,7 @@ def run_community_detection(G, Gd):
     }
 
 
-def save_initial_centrality_csv(G, centralities, comm_data, filepath="data/network_centrality_metrics.csv"):
+def save_initial_centrality_csv(Gu, centralities, comm_data, filepath="data/network_centrality_metrics.csv"):
     centrality_data = []
     
     # Unpack centralities
@@ -230,11 +274,13 @@ def save_initial_centrality_csv(G, centralities, comm_data, filepath="data/netwo
     
     # Unpack community mappings
     node_to_community = comm_data["node_to_community"]
+    node_to_infomap = comm_data.get("node_to_infomap", {})
     
-    for node in G.nodes():
+    for node in Gu.nodes():
         centrality_data.append({
             "user": node,
-            "community": node_to_community.get(node, 0) if len(G.nodes()) > 1 else 0,
+            "community": node_to_community.get(node, 0) if len(Gu.nodes()) > 1 else 0,
+            "community_infomap": node_to_infomap.get(node, -1) if len(Gu.nodes()) > 1 else -1,
             "degree_centrality_undirected": deg_cent.get(node, 0.0),
             "in_degree_centrality_directed": in_deg_cent.get(node, 0.0),
             "out_degree_centrality_directed": out_deg_cent.get(node, 0.0),
@@ -250,26 +296,21 @@ def save_initial_centrality_csv(G, centralities, comm_data, filepath="data/netwo
     return df_cent
 
 
-def plot_network_graphs(G, Gd, df_cent, comm_data, centralities, stance_results, output_dir="plots"):
+def plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities, stance_results, output_dir="plots"):
     """
     Generate the Louvain undirected, Stance, and PageRank directed network visualisations.
     """
-    # Unpack centralities
     deg_cent = centralities["deg_cent"]
     pagerank = centralities["pagerank"]
-    
-    # Unpack community data
     communities = comm_data["communities"]
     node_to_community = comm_data["node_to_community"]
     modularity_score = comm_data["modularity_score"]
-    
-    # Unpack stance results
     stance_leanings = stance_results["stance_leanings"]
     stance_assort = stance_results["polarization"]["stance_assortativity"]
 
-    nodes_in_relations = [n for n, d in G.degree() if d > 0]
+    nodes_in_relations = [n for n, d in Gu.degree() if d > 0]
     if len(nodes_in_relations) > 0:
-        subG = G.subgraph(nodes_in_relations)
+        subG = Gu.subgraph(nodes_in_relations)
         pos = nx.spring_layout(subG, k=0.15, iterations=40, seed=42)
         top_10_nodes = df_cent.sort_values(by="degree_centrality_undirected", ascending=False).head(10)['user'].tolist()
         labels_to_draw = {node: node for node in subG.nodes() if node in top_10_nodes}
@@ -327,11 +368,15 @@ def plot_network_graphs(G, Gd, df_cent, comm_data, centralities, stance_results,
         pos_dir = nx.spring_layout(subG_dir, k=0.15, iterations=40, seed=42)
 
         node_colors_dir = []
-        if len(subG_dir.nodes()) > 1 and len(communities) > 0:
-            cmap = plt.cm.get_cmap('tab20', len(communities))
+        infomap_communities = comm_data.get("infomap_communities", [])
+        node_to_infomap = comm_data.get("node_to_infomap", {})
+        infomap_modularity = comm_data.get("infomap_modularity", 0.0)
+
+        if len(subG_dir.nodes()) > 1 and len(infomap_communities) > 0:
+            cmap = plt.cm.get_cmap('tab20', len(infomap_communities))
             for node in subG_dir.nodes():
-                comm_id = node_to_community.get(node, 0)
-                node_colors_dir.append(cmap(comm_id))
+                comm_id = node_to_infomap.get(node, 0)
+                node_colors_dir.append(cmap(comm_id % len(infomap_communities)))
         else:
             node_colors_dir = '#3A6073'
 
@@ -347,7 +392,7 @@ def plot_network_graphs(G, Gd, df_cent, comm_data, centralities, stance_results,
     else:
         plt.text(0.5, 0.5, "Isolated graph / Not enough relationships", ha='center', va='center')
 
-    plt.title(f"Directed Social Network Graph (PageRank prestige & Louvain partitions)\n(Projected Modularity Q: {modularity_score:.4f})", pad=15)
+    plt.title(f"Directed Social Network Graph (PageRank prestige & Infomap partitions)\n(Projected Modularity Q: {infomap_modularity:.4f})", pad=15)
     plt.axis("off")
     plt.tight_layout()
     save_plot_copies("network_graph_directed.png")

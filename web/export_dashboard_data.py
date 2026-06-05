@@ -215,6 +215,7 @@ def main():
         
         # Maintain backwards compatibility for single community attribute (Louvain)
         comm = int(metrics.get('community', -1))
+        comm_infomap = int(metrics.get('community_infomap', -1))
         
         json_nodes.append({
             "id": node,
@@ -222,7 +223,7 @@ def main():
             "community": comm,
             "communities": {
                 "louvain": comm,
-                "infomap": comm
+                "infomap": comm_infomap
             },
             "pagerank": pagerank,
             "in_degree": in_degree,
@@ -248,19 +249,35 @@ def main():
     # Get NRC emotion columns
     emotion_cols = [c for c in df.columns if c.startswith('emotion_')]
     
+    # Load global metrics to fetch modularities
+    global_metrics_path = os.path.join(base_dir, "data", "network_global_metrics.csv")
+    louvain_mod = 0.9678
+    infomap_mod = 0.7500
+    if os.path.exists(global_metrics_path):
+        try:
+            global_df = pd.read_csv(global_metrics_path)
+            for _, row in global_df.iterrows():
+                if row['Metric'] == 'Louvain Modularity':
+                    louvain_mod = float(row['Value'])
+                elif row['Metric'] == 'Infomap Modularity':
+                    infomap_mod = float(row['Value'])
+        except Exception as e:
+            print(f"Error loading global metrics: {e}")
+            
     # Profile all community detection algorithms
     louvain_comms = profile_communities(df, cent_df, "community", emotion_cols)
+    infomap_comms = profile_communities(df, cent_df, "community_infomap", emotion_cols)
     
     algorithms = {
         "louvain": {
             "name": "Louvain",
-            "modularity": 0.9678,
+            "modularity": louvain_mod,
             "communities": louvain_comms
         },
         "infomap": {
-            "name": "Louvain",
-            "modularity": 0.9678,
-            "communities": louvain_comms
+            "name": "Infomap",
+            "modularity": infomap_mod,
+            "communities": infomap_comms
         }
     }
     

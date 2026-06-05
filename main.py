@@ -71,24 +71,24 @@ def main():
         nlp_results = run_nlp_enrichment(df, output_filepath=processed_filepath)
         df_processed = nlp_results["df"]
 
-    G, Gd = build_networks(df_processed, did_to_handle)
-    if len(G.nodes()) == 0:
+    Gu, Gd = build_networks(df_processed, did_to_handle)
+    if len(Gu.nodes()) == 0:
         print("Warning: Network has 0 nodes. SNA modeling cannot proceed.")
         return
 
-    centralities = calculate_centralities(G, Gd)
-    comm_data = run_community_detection(G, Gd)
-    df_cent = save_initial_centrality_csv(G, centralities, comm_data, filepath="data/network_centrality_metrics.csv")
+    centralities = calculate_centralities(Gu, Gd)
+    comm_data = run_community_detection(Gu, Gd)
+    df_cent = save_initial_centrality_csv(Gu, centralities, comm_data, filepath="data/network_centrality_metrics.csv")
 
     analyze_community_sentiment_polarization(
-        df_processed, G, comm_data["node_to_community"], comm_data["communities"],
+        df_processed, Gu, comm_data["node_to_community"], comm_data["communities"],
         output_dir="plots", title_suffix=""
     )
 
-    stance_results = run_stance_propagation(df_processed, G, Gd, df_cent, filepath="data/network_centrality_metrics.csv")
+    stance_results = run_stance_propagation(df_processed, Gu, Gd, df_cent, filepath="data/network_centrality_metrics.csv")
     
     # Generate network graph visualizations
-    plot_network_graphs(G, Gd, stance_results["df_cent"], comm_data, centralities, stance_results, output_dir="plots")
+    plot_network_graphs(Gu, Gd, stance_results["df_cent"], comm_data, centralities, stance_results, output_dir="plots")
     
     # Generate sentiment and NLP visualizations
     plot_sentiment_distribution(df_processed, output_dir="plots")

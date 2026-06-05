@@ -207,7 +207,7 @@ def run_nlp_enrichment(df, output_filepath="data/sinner_alcaraz_processed.csv"):
     }
 
 
-def analyze_community_sentiment_polarization(df, G, node_to_community, communities,
+def analyze_community_sentiment_polarization(df, Gu, node_to_community, communities,
                                               output_dir, title_suffix=""):
     """
     Join Louvain community IDs back to post-level data and compare

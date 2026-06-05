@@ -9,6 +9,7 @@ import spacy
 import nltk
 from nltk.tokenize import TweetTokenizer
 from nltk.corpus import stopwords
+from utils import parse_list_col, build_did_to_handle
 
 # Ensure NLTK resources are downloaded
 for _resource in ['stopwords', 'punkt', 'punkt_tab']:
@@ -25,13 +26,10 @@ except Exception:
     subprocess.run([sys.executable, "-m", "spacy", "download", "en_core_web_sm"], check=True)
     nlp = spacy.load("en_core_web_sm")
 
-# Tokenizer and stopwords setup
 tokenizer = TweetTokenizer()
 stop_words = set(stopwords.words('english'))
 custom_stopwords = stop_words.union({'tennis', 'match', 'play', 'player', 'set'})
 
-# Import utilities from utils
-from utils import parse_list_col, build_did_to_handle
 
 def clean_text(text):
     if pd.isna(text):
@@ -48,14 +46,9 @@ def clean_text(text):
 
 def preprocess(text):
     cleaned = clean_text(text)
-    
-    # Use TweetTokenizer to preserve hashtags and emojis
     tokens = tokenizer.tokenize(cleaned.lower())
-    
-    # Create pre-tokenized Doc in spaCy
     doc = spacy.tokens.Doc(nlp.vocab, words=tokens)
-    
-    # Run active tagging and lemmatization components
+    # Run lemmatization components
     for name in ["tagger", "attribute_ruler", "lemmatizer"]:
         if name in nlp.pipe_names:
             doc = nlp.get_pipe(name)(doc)
