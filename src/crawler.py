@@ -201,6 +201,9 @@ def search_posts_time_window(
             if len(rows) >= max_posts:
                 break
 
+        if print_every_page:
+            print(f"    Page {page}: fetched {len(posts)} posts. Valid matches in window so far: {len(rows)}")
+
         if cursor is None:
             break
 
@@ -237,6 +240,7 @@ def search_posts_day_by_day(
         day_since_str = current_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
         day_until_str = next_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
         
+        print(f"  -> Crawling time window: {day_since_str} to {day_until_str}...")
         df_day = search_posts_time_window(
             client=client,
             query=query,
@@ -249,7 +253,10 @@ def search_posts_day_by_day(
         )
         
         if not df_day.empty:
+            print(f"     Found {len(df_day)} matching posts for this day.")
             all_dfs.append(df_day)
+        else:
+            print("     No matching posts found for this day.")
             
         current_dt = next_dt
         
@@ -263,14 +270,17 @@ if __name__ == "__main__":
     until_iso = "2025-09-10T00:00:00.000Z"
     
     QUERIES = {
-        "sinner": '(jannik | sinner | Jannik | Sinner) (tennis | usopen | "us open" | alcaraz | slam | match)',
-        "alcaraz": '(alcaraz | Alcaraz) (tennis | usopen | "us open" | sinner | slam | match)',
+        "sinner": '(jannik | sinner | Jannik | Sinner) (tennis | usopen | "us open" | alcaraz | Alcaraz | slam | match)',
+        "alcaraz": '(alcaraz | Alcaraz) (tennis | usopen | "us open" | jannik | sinner | Jannik | Sinner | slam | match)',
     }
     
     MAX_POSTS_PER_DAY = 5000
     
     df_list = []
     for query_name, query_str in QUERIES.items():
+        print(f"\n==================================================")
+        print(f"STARTING CRAWL FOR QUERY: '{query_name}'")
+        print(f"==================================================")
         df_q = search_posts_day_by_day(
             client=client,
             query=query_str,
@@ -284,11 +294,16 @@ if __name__ == "__main__":
         if not df_q.empty:
             df_q["query_source"] = query_name
             df_list.append(df_q)
+            print(f"Finished crawling '{query_name}' query. Total unique day-matched posts: {len(df_q)}")
+        else:
+            print(f"Finished crawling '{query_name}' query. No posts were returned.")
             
     if df_list:
         df_all = pd.concat(df_list, ignore_index=True)
+        print(f"\nCombining crawled data. Combined total across queries: {len(df_all)} posts.")
         df_all["in_both"] = df_all.duplicated(subset="uri", keep=False)
         df_all = df_all.drop_duplicates(subset="uri", keep="first")
+        print(f"Deduplicated total unique posts: {len(df_all)} posts.")
         df_all = df_all.sort_values("created_at", ascending=True).reset_index(drop=True)
         
         cols_to_drop = ["cid", "quote_count", "hashtags", "reply_parent_uri", "reply_root_uri"]
@@ -297,5 +312,6 @@ if __name__ == "__main__":
         os.makedirs("data", exist_ok=True)
         output_file = "data/sinner_alcaraz_posts.csv"
         df_all.to_csv(output_file, index=False)
+        print(f"Successfully saved crawled posts to: {output_file}")
     else:
-        print("No posts found. Please verify query or dates.")
+        print("\nNo posts found across any queries. Verify credentials, query terms, or search time windows.")
