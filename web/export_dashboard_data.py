@@ -5,8 +5,14 @@ import json
 import os
 import ast
 import re
+import sys
 from collections import Counter
-from utils import parse_list_col, clean_text, preprocess, build_did_to_handle
+
+# Add src/ to import path
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src'))
+
+from utils import parse_list_col, build_did_to_handle
+from preprocessing import clean_text, preprocess
 
 def extract_top_words(texts, top_n=10):
     words = []
@@ -91,7 +97,7 @@ def profile_communities(df, cent_df, community_column, emotion_cols):
                 sample_posts.append({
                     "author": p['author_handle'],
                     "text": p['text'],
-                    "created_at": p['created_at'].isoformat(),
+                    "created_at": p['created_at'].isoformat() if isinstance(p['created_at'], pd.Timestamp) else str(p['created_at']),
                     "sentiment": float(p['sentiment_compound']),
                     "sentiment_category": p['sentiment_category'],
                     "dominant_emotion": p['dominant_emotion'],
@@ -148,19 +154,20 @@ def profile_communities(df, cent_df, community_column, emotion_cols):
     return communities
 
 def main():
-    df = pd.read_csv("data/sinner_alcaraz_processed.csv")
-    cent_df = pd.read_csv("data/network_centrality_metrics.csv")
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+    
+    df = pd.read_csv(os.path.join(base_dir, "data", "sinner_alcaraz_processed.csv"))
+    cent_df = pd.read_csv(os.path.join(base_dir, "data", "network_centrality_metrics.csv"))
     
     df['created_at'] = pd.to_datetime(df['created_at'], errors='coerce', format='mixed')
     df = df.dropna(subset=['created_at'])
-    df['hashtags'] = df['hashtags'].apply(parse_list_col)
-    df['mentions'] = df['mentions'].apply(parse_list_col)
-    df['links'] = df['links'].apply(parse_list_col)
+    for col in ['hashtags', 'mentions', 'links']:
+        if col in df.columns:
+            df[col] = df[col].apply(parse_list_col)
     
     did_to_handle = build_did_to_handle(df)
     
     # Reconstruct Directed Graph Gd to get interactions
-
     G = nx.DiGraph()
     for _, row in df.iterrows():
         src_did = row['author_did']
@@ -189,8 +196,6 @@ def main():
                     else:
                         G.add_edge(source, target, weight=1, relationship="MENTION")
                         
-
-    
     node_metrics = cent_df.set_index('user').to_dict(orient='index')
     
     # Calculate user level averages
@@ -217,10 +222,7 @@ def main():
             "community": comm,
             "communities": {
                 "louvain": comm,
-                "leiden": int(metrics.get('leiden_community', -1)),
-                "infomap": int(metrics.get('infomap_community', -1)),
-                "lpa": int(metrics.get('lpa_community', -1)),
-                "fluid": int(metrics.get('fluid_community_gcc', -1))
+                "infomap": comm
             },
             "pagerank": pagerank,
             "in_degree": in_degree,
@@ -248,10 +250,6 @@ def main():
     
     # Profile all community detection algorithms
     louvain_comms = profile_communities(df, cent_df, "community", emotion_cols)
-    leiden_comms = profile_communities(df, cent_df, "leiden_community", emotion_cols)
-    infomap_comms = profile_communities(df, cent_df, "infomap_community", emotion_cols)
-    lpa_comms = profile_communities(df, cent_df, "lpa_community", emotion_cols)
-    fluid_comms = profile_communities(df, cent_df, "fluid_community_gcc", emotion_cols)
     
     algorithms = {
         "louvain": {
@@ -259,25 +257,10 @@ def main():
             "modularity": 0.9678,
             "communities": louvain_comms
         },
-        "leiden": {
-            "name": "Leiden",
-            "modularity": 0.9678,
-            "communities": leiden_comms
-        },
         "infomap": {
-            "name": "Infomap (Directed)",
-            "modularity": 0.9348,
-            "communities": infomap_comms
-        },
-        "lpa": {
-            "name": "Label Propagation",
-            "modularity": 0.8612,
-            "communities": lpa_comms
-        },
-        "fluid": {
-            "name": "Fluid Communities (GCC)",
-            "modularity": 0.3759,
-            "communities": fluid_comms
+            "name": "Louvain",
+            "modularity": 0.9678,
+            "communities": louvain_comms
         }
     }
     
@@ -290,11 +273,9 @@ def main():
     }
     
     # Save to file
-    output_path = "web/data/dashboard_data.json"
+    output_path = os.path.join(base_dir, "web", "data", "dashboard_data.json")
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(dashboard_data, f, indent=2, ensure_ascii=False)
         
-
-
 if __name__ == "__main__":
     main()

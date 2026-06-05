@@ -11,3 +11,4 @@ nrclex>=3.0.0
 requests>=2.31.0
 python-dotenv>=1.0.0
 scipy>=1.11.0
+wordcloud>=1.9.0

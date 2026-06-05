@@ -291,6 +291,9 @@ if __name__ == "__main__":
         df_all = df_all.drop_duplicates(subset="uri", keep="first")
         df_all = df_all.sort_values("created_at", ascending=True).reset_index(drop=True)
         
+        cols_to_drop = ["cid", "quote_count", "hashtags", "reply_parent_uri", "reply_root_uri"]
+        df_all = df_all.drop(columns=[col for col in cols_to_drop if col in df_all.columns], errors="ignore")
+
         os.makedirs("data", exist_ok=True)
         output_file = "data/sinner_alcaraz_posts.csv"
         df_all.to_csv(output_file, index=False)

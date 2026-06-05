@@ -8,23 +8,68 @@ np.random.seed(42)
 
 # Ensure src/ is in the import path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+# Ensure web/ is in the import path for export_dashboard_data
+sys.path.append(os.path.join(os.path.dirname(__file__), 'web'))
 
-
-from utils import load_and_preprocess_data
-from network_analysis import (build_networks, calculate_centralities,
-                              run_community_detection, save_initial_centrality_csv)
-from nlp_analysis import run_nlp_enrichment, analyze_community_sentiment_polarization
-from stance_propagation import run_stance_propagation
-from visualization import generate_visualizations
+from preprocessing import load_and_preprocess_data
+from social_network_analysis import (build_networks, calculate_centralities,
+                                      run_community_detection, save_initial_centrality_csv,
+                                      plot_network_graphs)
+from social_sentiment_analysis import (run_nlp_enrichment, analyze_community_sentiment_polarization,
+                                        run_stance_propagation, plot_emotion_distribution,
+                                        plot_sentiment_distribution, plot_sentiment_over_time,
+                                        plot_rivalry_comparison, plot_median_sentiment_over_rounds,
+                                        plot_fanbase_wordclouds)
 import export_dashboard_data
 
 def main():
-    df, did_to_handle = load_and_preprocess_data("data/sinner_alcaraz_posts.csv")
-    if df is None:
-        return
+    processed_filepath = "data/sinner_alcaraz_processed.csv"
 
-    nlp_results = run_nlp_enrichment(df, output_filepath="data/sinner_alcaraz_processed.csv")
-    df_processed = nlp_results["df"]
+    if os.path.exists(processed_filepath):
+        print(f"[INFO] Processed dataset found at {processed_filepath}. Loading it directly...")
+        df_processed = pd.read_csv(processed_filepath, parse_dates=['created_at'])
+        
+        # Parse list columns stored as strings
+        from utils import parse_list_col, build_did_to_handle
+        for col in ['mentions', 'hashtags', 'links', 'linked_entities']:
+            if col in df_processed.columns:
+                df_processed[col] = df_processed[col].apply(parse_list_col)
+        
+        did_to_handle = build_did_to_handle(df_processed)
+        
+        # Re-derive sinner and alcaraz scores from the loaded dataset
+        sinner_scores = []
+        alcaraz_scores = []
+        for _, row in df_processed.iterrows():
+            linked_ents = row['linked_entities']
+            comp = row['sentiment_compound']
+            
+            uris = [ent['uri'] for ent in linked_ents if isinstance(ent, dict)]
+            is_sinner = "http://dbpedia.org/resource/Jannik_Sinner" in uris
+            is_alcaraz = "http://dbpedia.org/resource/Carlos_Alcaraz" in uris
+            
+            t = str(row['text']).lower()
+            if not is_sinner and ("sinner" in t or "jannik" in t):
+                is_sinner = True
+            if not is_alcaraz and ("alcaraz" in t or "carlos" in t):
+                is_alcaraz = True
+                
+            if is_sinner:
+                sinner_scores.append(comp)
+            if is_alcaraz:
+                alcaraz_scores.append(comp)
+                
+        nlp_results = {
+            "df": df_processed,
+            "sinner_scores": sinner_scores,
+            "alcaraz_scores": alcaraz_scores
+        }
+    else:
+        df, did_to_handle = load_and_preprocess_data("data/sinner_alcaraz_posts.csv")
+        if df is None:
+            return
+        nlp_results = run_nlp_enrichment(df, output_filepath=processed_filepath)
+        df_processed = nlp_results["df"]
 
     G, Gd = build_networks(df_processed, did_to_handle)
     if len(G.nodes()) == 0:
@@ -41,8 +86,21 @@ def main():
     )
 
     stance_results = run_stance_propagation(df_processed, G, Gd, df_cent, filepath="data/network_centrality_metrics.csv")
-    generate_visualizations(G, Gd, stance_results["df_cent"], comm_data, centralities, stance_results, nlp_results)
+    
+    # Generate network graph visualizations
+    plot_network_graphs(G, Gd, stance_results["df_cent"], comm_data, centralities, stance_results, output_dir="plots")
+    
+    # Generate sentiment and NLP visualizations
+    plot_sentiment_distribution(df_processed, output_dir="plots")
+    plot_emotion_distribution(df_processed, output_dir="plots", title_suffix="")
+    plot_sentiment_over_time(df_processed, output_dir="plots")
+    plot_rivalry_comparison(nlp_results["sinner_scores"], nlp_results["alcaraz_scores"], output_dir="plots")
+    plot_median_sentiment_over_rounds(df_processed, output_dir="plots")
+    plot_fanbase_wordclouds(df_processed, stance_results["df_cent"], output_dir="plots")
+    
+    # Run dashboard JSON exporter
     export_dashboard_data.main()
 
 if __name__ == "__main__":
+    import pandas as pd
     main()

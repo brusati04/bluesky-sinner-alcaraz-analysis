@@ -1,0 +1,11 @@
+Metric,Value
+Density,0.002026594762626501
+Transitivity,0.02021563342318059
+Average Clustering,0.011200585651537335
+GCC Size,111.0
+GCC Fraction,0.16251830161054173
+GCC Avg Path Length,5.885503685503686
+GCC Diameter,14.0
+GCC Radius,7.0
+GCC Min Eccentricity,7.0
+GCC Max Eccentricity,14.0
