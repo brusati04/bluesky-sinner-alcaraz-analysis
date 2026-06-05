@@ -300,8 +300,9 @@ def plot_community_emotion_profiles(df, Gu, node_to_community, communities, outp
     df['community_id'] = df['author_handle'].map(author_community)
     df_with_comm = df.dropna(subset=['community_id']).copy()
 
-    comm_sizes = df_with_comm['community_id'].value_counts()
-    top_comms = comm_sizes.head(3).index.tolist()
+    from collections import Counter
+    counts = Counter(node_to_community.values())
+    top_comms = [cid for cid, count in counts.most_common(3)]
 
     emotion_cols = [f'emotion_{e}' for e in NRC_EMOTIONS]
 
@@ -373,8 +374,9 @@ def plot_community_aspect_sentiment(df, Gu, node_to_community, communities, outp
     df['community_id'] = df['author_handle'].map(author_community)
     df_with_comm = df.dropna(subset=['community_id', 'sentiment_compound']).copy()
 
-    comm_sizes = df_with_comm['community_id'].value_counts()
-    top_comms = comm_sizes.head(3).index.tolist()
+    from collections import Counter
+    counts = Counter(node_to_community.values())
+    top_comms = [cid for cid, count in counts.most_common(3)]
 
     records = []
     for cid in top_comms:
