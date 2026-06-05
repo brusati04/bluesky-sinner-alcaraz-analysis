@@ -298,18 +298,20 @@ def save_initial_centrality_csv(Gu, centralities, comm_data, filepath="data/netw
 
 def get_community_color_map(node_to_community):
     from collections import Counter
+    import colorsys
     counts = Counter(node_to_community.values())
     sorted_comm_ids = [cid for cid, count in counts.most_common()]
     
-    # 5 clear, visible, distinct colors (Teal, Orange, Purple, Dark Blue, Red)
-    palette = ["#1abc9c", "#e67e22", "#9b59b6", "#34495e", "#e74c3c"]
-    
     color_map = {}
     for idx, cid in enumerate(sorted_comm_ids):
-        if idx < len(palette):
-            color_map[cid] = palette[idx]
-        else:
-            color_map[cid] = "#bdc3c7"
+        # Use golden ratio spacing for maximum hue distinguishability
+        h = (idx * 0.618033988749895) % 1.0
+        # Saturation of 85%, Lightness of 50% for vibrant, visible colors
+        s = 0.85
+        l = 0.50
+        r, g, b = colorsys.hls_to_rgb(h, l, s)
+        hex_color = '#%02x%02x%02x' % (int(r*255), int(g*255), int(b*255))
+        color_map[cid] = hex_color
     return color_map
 
 
@@ -327,19 +329,11 @@ def get_filtered_networks(Gu, Gd, min_component_size=10):
     return Gu_filtered, Gd_filtered
 
 
-def plot_filtered_network_graph(Gu, Gd, df_cent, comm_data, centralities, stance_results, min_component_size=10, output_dir="plots"):
+def plot_filtered_network_graph(Gu, Gd, df_cent, comm_data, centralities, df_processed, min_component_size=10, output_dir="plots", top_k=3, sort_by="node_count"):
     """
-    Same as plot_network_graphs but drops connected components with <= min_component_size nodes.
-    Positions are computed from the full original graphs so surviving nodes stay in place.
-    Does not modify the original graphs.
+    Same as plot_network_graphs but drops connected components with <= min_component_size nodes,
+    and filters to keep only the top k communities (selected by node count or post volume).
     """
-    # Compute layouts from the original graphs before filtering
-    nodes_with_edges = [n for n, d in Gu.degree() if d > 0]
-    pos = nx.spring_layout(Gu.subgraph(nodes_with_edges), k=0.15, iterations=40, seed=42)
-
-    nodes_with_edges_dir = [n for n, d in Gd.degree() if d > 0]
-    pos_dir = nx.spring_layout(Gd.subgraph(nodes_with_edges_dir), k=0.15, iterations=40, seed=42)
-
     Gu_plot = Gu.copy()
     for component in list(nx.connected_components(Gu_plot)):
         if len(component) <= min_component_size:
@@ -350,12 +344,65 @@ def plot_filtered_network_graph(Gu, Gd, df_cent, comm_data, centralities, stance
         if len(component) <= min_component_size:
             Gd_plot.remove_nodes_from(component)
 
-    plot_network_graphs(Gu_plot, Gd_plot, df_cent, comm_data, centralities, stance_results, output_dir=output_dir, pos=pos, pos_dir=pos_dir)
+    # 2. Find the top k communities for Louvain (undirected)
+    node_to_louvain = comm_data["node_to_louvain"]
+    if sort_by == "post_volume":
+        author_community = {}
+        for _, row in df_processed.iterrows():
+            handle = row.get('author_handle')
+            if handle and handle in node_to_louvain and handle in Gu_plot.nodes():
+                author_community[handle] = node_to_louvain[handle]
+        df_temp = df_processed.copy()
+        df_temp['community_id'] = df_temp['author_handle'].map(author_community)
+        df_temp = df_temp.dropna(subset=['community_id'])
+        comm_post_counts = df_temp['community_id'].value_counts()
+        top_louvain_comms = set(comm_post_counts.head(top_k).index.tolist())
+    else: # default to "node_count"
+        from collections import Counter
+        filtered_node_to_comm = {node: comm for node, comm in node_to_louvain.items() if node in Gu_plot.nodes()}
+        counts = Counter(filtered_node_to_comm.values())
+        top_louvain_comms = set([cid for cid, count in counts.most_common(top_k)])
+
+    # Remove nodes from Gu_plot not in top Louvain communities
+    nodes_to_remove_u = [node for node in Gu_plot.nodes() if node_to_louvain.get(node) not in top_louvain_comms]
+    Gu_plot.remove_nodes_from(nodes_to_remove_u)
+
+    # 3. Find the top k communities for Infomap (directed)
+    node_to_infomap = comm_data["node_to_infomap"]
+    if sort_by == "post_volume":
+        author_community_d = {}
+        for _, row in df_processed.iterrows():
+            handle = row.get('author_handle')
+            if handle and handle in node_to_infomap and handle in Gd_plot.nodes():
+                author_community_d[handle] = node_to_infomap[handle]
+        df_temp_d = df_processed.copy()
+        df_temp_d['community_id'] = df_temp_d['author_handle'].map(author_community_d)
+        df_temp_d = df_temp_d.dropna(subset=['community_id'])
+        comm_post_counts_d = df_temp_d['community_id'].value_counts()
+        top_infomap_comms = set(comm_post_counts_d.head(top_k).index.tolist())
+    else: # default to "node_count"
+        from collections import Counter
+        filtered_node_to_comm_d = {node: comm for node, comm in node_to_infomap.items() if node in Gd_plot.nodes()}
+        counts_d = Counter(filtered_node_to_comm_d.values())
+        top_infomap_comms = set([cid for cid, count in counts_d.most_common(top_k)])
+
+    # Remove nodes from Gd_plot not in top Infomap communities
+    nodes_to_remove_d = [node for node in Gd_plot.nodes() if node_to_infomap.get(node) not in top_infomap_comms]
+    Gd_plot.remove_nodes_from(nodes_to_remove_d)
+
+    # Compute layouts from the original graphs before filtering
+    nodes_with_edges = [n for n, d in Gu.degree() if d > 0]
+    pos = nx.spring_layout(Gu.subgraph(nodes_with_edges), k=0.15, iterations=40, seed=42)
+
+    nodes_with_edges_dir = [n for n, d in Gd.degree() if d > 0]
+    pos_dir = nx.spring_layout(Gd.subgraph(nodes_with_edges_dir), k=0.15, iterations=40, seed=42)
+
+    plot_network_graphs(Gu_plot, Gd_plot, df_cent, comm_data, centralities, output_dir=output_dir, pos=pos, pos_dir=pos_dir)
 
 
-def plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities, stance_results, output_dir="plots", pos=None, pos_dir=None):
+def plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities, output_dir="plots", pos=None, pos_dir=None):
     """
-    Generate the Louvain undirected, Stance, and PageRank directed network visualisations.
+    Generate the Louvain undirected and PageRank directed network visualisations.
     pos / pos_dir: precomputed layouts; if provided they are reused as-is (extra nodes are ignored).
     """
     deg_cent = centralities["deg_cent"]
@@ -363,8 +410,6 @@ def plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities, stance_results
     communities = comm_data["louvain_communities"]
     node_to_community = comm_data["node_to_louvain"]
     modularity_score = comm_data["modularity_score"]
-    stance_leanings = stance_results["stance_leanings"]
-    stance_assort = stance_results["polarization"]["stance_assortativity"]
 
     nodes_in_relations = [n for n, d in Gu.degree() if d > 0]
     if len(nodes_in_relations) > 0:
@@ -392,28 +437,7 @@ def plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities, stance_results
     save_plot_copies("network_graph.png", output_dir=output_dir)
     plt.close()
 
-    # 2. Stance Network Graph
-    plt.figure(figsize=(12, 12))
-    node_colors_stance = []
-    for node in subG.nodes():
-        leaning = stance_leanings.get(node, "neutral")
-        if leaning == "sinner":
-            node_colors_stance.append("#3498db") # Blue
-        elif leaning == "alcaraz":
-            node_colors_stance.append("#e67e22") # Orange
-        else:
-            node_colors_stance.append("#95a5a6") # Grey
-
-    nx.draw_networkx_edges(subG, pos, alpha=0.15, edge_color="grey")
-    nx.draw_networkx_nodes(subG, pos, node_size=node_sizes, node_color=node_colors_stance, alpha=0.9)
-    nx.draw_networkx_labels(subG, pos, labels=labels_to_draw, font_size=9, font_weight="bold", font_color="#1e272c")
-    plt.title(f"Stance Network Graph (Direct Sentiment Average)\n(Stance Assortativity: {stance_assort:.4f})", pad=15)
-    plt.axis("off")
-    plt.tight_layout()
-    save_plot_copies("stance_network_graph.png", output_dir=output_dir)
-    plt.close()
-
-    # 3. Directed Social Network Graph
+    # 2. Directed Social Network Graph
     plt.figure(figsize=(12, 12))
     nodes_in_relations_dir = [n for n, d in Gd.degree() if d > 0]
     if len(nodes_in_relations_dir) > 0:
