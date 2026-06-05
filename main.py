@@ -12,7 +12,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'web'))
 from preprocessing import load_and_preprocess_data
 from social_network_analysis import (build_networks, calculate_centralities,
                                       run_community_detection, save_initial_centrality_csv,
-                                      plot_network_graphs, plot_filtered_network_graph)
+                                      plot_network_graphs, plot_filtered_network_graph,
+                                      get_filtered_networks)
 from social_sentiment_analysis import (run_nlp_enrichment, analyze_community_sentiment_polarization,
                                         run_stance_propagation, plot_emotion_distribution,
                                         plot_sentiment_distribution, plot_sentiment_over_time,
@@ -77,9 +78,31 @@ def main():
     comm_data = run_community_detection(Gu, Gd)
     df_cent = save_initial_centrality_csv(Gu, centralities, comm_data, filepath="data/network_centrality_metrics.csv")
 
+    # Retrieve filtered subgraphs (aligned with the plots in the 'filtered' folder)
+    Gu_filtered, Gd_filtered = get_filtered_networks(Gu, Gd, min_component_size=10)
+
+    # 1. Louvain Sentiment Polarization on Full Undirected Graph
     analyze_community_sentiment_polarization(
-        df_processed, Gu, comm_data["node_to_community"], comm_data["communities"],
-        output_dir="plots", title_suffix=""
+        df_processed, Gu, comm_data["node_to_louvain"], comm_data["louvain_communities"],
+        output_dir="plots", title_suffix=" (Louvain)"
+    )
+
+    # 2. Infomap Sentiment Polarization on Full Directed Graph
+    analyze_community_sentiment_polarization(
+        df_processed, Gd, comm_data["node_to_infomap"], comm_data["infomap_communities"],
+        output_dir="plots", title_suffix=" (Infomap)"
+    )
+
+    # 3. Louvain Sentiment Polarization on Filtered Undirected Graph
+    analyze_community_sentiment_polarization(
+        df_processed, Gu_filtered, comm_data["node_to_louvain"], comm_data["louvain_communities"],
+        output_dir="plots", title_suffix=" (Louvain - Filtered)"
+    )
+
+    # 4. Infomap Sentiment Polarization on Filtered Directed Graph
+    analyze_community_sentiment_polarization(
+        df_processed, Gd_filtered, comm_data["node_to_infomap"], comm_data["infomap_communities"],
+        output_dir="plots", title_suffix=" (Infomap - Filtered)"
     )
 
     stance_results = run_stance_propagation(df_processed, Gu, Gd, df_cent, filepath="data/network_centrality_metrics.csv")

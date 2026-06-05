@@ -244,9 +244,9 @@ def run_community_detection(Gu, Gd):
         print("Error calculating undirected community assortativity:", e)
 
     return {
-        "communities": communities,
+        "louvain_communities": communities,
         "modularity_score": modularity_score,
-        "node_to_community": node_to_community,
+        "node_to_louvain": node_to_community,
         "infomap_communities": infomap_communities,
         "infomap_modularity": infomap_modularity,
         "node_to_infomap": node_to_infomap,
@@ -273,13 +273,13 @@ def save_initial_centrality_csv(Gu, centralities, comm_data, filepath="data/netw
     pagerank = centralities["pagerank"]
     
     # Unpack community mappings
-    node_to_community = comm_data["node_to_community"]
+    node_to_louvain = comm_data["node_to_louvain"]
     node_to_infomap = comm_data.get("node_to_infomap", {})
     
     for node in Gu.nodes():
         centrality_data.append({
             "user": node,
-            "community": node_to_community.get(node, 0) if len(Gu.nodes()) > 1 else 0,
+            "community": node_to_louvain.get(node, 0) if len(Gu.nodes()) > 1 else 0,
             "community_infomap": node_to_infomap.get(node, -1) if len(Gu.nodes()) > 1 else -1,
             "degree_centrality_undirected": deg_cent.get(node, 0.0),
             "in_degree_centrality_directed": in_deg_cent.get(node, 0.0),
@@ -294,6 +294,20 @@ def save_initial_centrality_csv(Gu, centralities, comm_data, filepath="data/netw
     df_cent.to_csv(filepath, index=False)
 
     return df_cent
+
+
+def get_filtered_networks(Gu, Gd, min_component_size=10):
+    Gu_filtered = Gu.copy()
+    for component in list(nx.connected_components(Gu_filtered)):
+        if len(component) <= min_component_size:
+            Gu_filtered.remove_nodes_from(component)
+
+    Gd_filtered = Gd.copy()
+    for component in list(nx.weakly_connected_components(Gd_filtered)):
+        if len(component) <= min_component_size:
+            Gd_filtered.remove_nodes_from(component)
+
+    return Gu_filtered, Gd_filtered
 
 
 def plot_filtered_network_graph(Gu, Gd, df_cent, comm_data, centralities, stance_results, min_component_size=10, output_dir="plots"):
@@ -329,8 +343,8 @@ def plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities, stance_results
     """
     deg_cent = centralities["deg_cent"]
     pagerank = centralities["pagerank"]
-    communities = comm_data["communities"]
-    node_to_community = comm_data["node_to_community"]
+    communities = comm_data["louvain_communities"]
+    node_to_community = comm_data["node_to_louvain"]
     modularity_score = comm_data["modularity_score"]
     stance_leanings = stance_results["stance_leanings"]
     stance_assort = stance_results["polarization"]["stance_assortativity"]

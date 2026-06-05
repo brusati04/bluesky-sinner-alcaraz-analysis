@@ -1149,7 +1149,7 @@
       "betweenness": 2.368433518071148e-05,
       "sentiment_avg": 0.032375,
       "post_count": 4,
-      "stance_score": 0.0305043749999999,
+      "stance_score": 0.030504375,
       "stance_leaning": "neutral"
     },
     {
@@ -1473,7 +1473,7 @@
       "betweenness": 0.0,
       "sentiment_avg": 0.57785,
       "post_count": 2,
-      "stance_score": 0.21796,
+      "stance_score": 0.2179599999999999,
       "stance_leaning": "sinner"
     },
     {
@@ -2517,7 +2517,7 @@
       "betweenness": 0.0,
       "sentiment_avg": 0.9231,
       "post_count": 1,
-      "stance_score": -0.7335675,
+      "stance_score": -0.7335674999999999,
       "stance_leaning": "alcaraz"
     },
     {
@@ -3075,7 +3075,7 @@
       "betweenness": 0.0,
       "sentiment_avg": 0.06845000000000001,
       "post_count": 2,
-      "stance_score": -0.18449125,
+      "stance_score": -0.1844912499999999,
       "stance_leaning": "alcaraz"
     },
     {
@@ -3129,7 +3129,7 @@
       "betweenness": 0.0,
       "sentiment_avg": 0.34099999999999997,
       "post_count": 4,
-      "stance_score": -0.1015522619047619,
+      "stance_score": -0.1015522619047618,
       "stance_leaning": "alcaraz"
     },
     {
@@ -5577,7 +5577,7 @@
       "betweenness": 0.0,
       "sentiment_avg": -0.8562,
       "post_count": 1,
-      "stance_score": 0.1643016666666666,
+      "stance_score": 0.1643016666666667,
       "stance_leaning": "sinner"
     },
     {
@@ -6243,7 +6243,7 @@
       "betweenness": 0.0,
       "sentiment_avg": 0.7096,
       "post_count": 1,
-      "stance_score": 0.3829261538461538,
+      "stance_score": 0.3829261538461539,
       "stance_leaning": "sinner"
     },
     {
@@ -6783,7 +6783,7 @@
       "betweenness": 0.0,
       "sentiment_avg": 0.0,
       "post_count": 1,
-      "stance_score": -0.1925,
+      "stance_score": -0.1924999999999999,
       "stance_leaning": "alcaraz"
     },
     {
@@ -7359,7 +7359,7 @@
       "betweenness": 0.0,
       "sentiment_avg": -0.8588,
       "post_count": 1,
-      "stance_score": -0.4133233333333332,
+      "stance_score": -0.4133233333333331,
       "stance_leaning": "alcaraz"
     },
     {
@@ -8529,7 +8529,7 @@
       "betweenness": 0.0,
       "sentiment_avg": 0.2871222222222222,
       "post_count": 9,
-      "stance_score": -0.1382555175688509,
+      "stance_score": -0.1382555175688508,
       "stance_leaning": "alcaraz"
     },
     {
@@ -9573,7 +9573,7 @@
       "betweenness": 0.0,
       "sentiment_avg": 0.54345,
       "post_count": 2,
-      "stance_score": -0.3703412499999999,
+      "stance_score": -0.37034125,
       "stance_leaning": "alcaraz"
     },
     {
@@ -9627,7 +9627,7 @@
       "betweenness": 0.0,
       "sentiment_avg": 0.4993,
       "post_count": 1,
-      "stance_score": -0.2347025,
+      "stance_score": -0.2347025000000001,
       "stance_leaning": "alcaraz"
     },
     {
@@ -10023,7 +10023,7 @@
       "betweenness": 0.0,
       "sentiment_avg": 0.4011166666666666,
       "post_count": 6,
-      "stance_score": -0.3618476893939393,
+      "stance_score": -0.3618476893939394,
       "stance_leaning": "alcaraz"
     },
     {
@@ -11931,7 +11931,7 @@
       "betweenness": 0.0,
       "sentiment_avg": 0.0129,
       "post_count": 1,
-      "stance_score": -0.1149143181818181,
+      "stance_score": -0.1149143181818182,
       "stance_leaning": "alcaraz"
     },
     {
@@ -12093,7 +12093,7 @@
       "betweenness": 0.0,
       "sentiment_avg": 0.31243333333333334,
       "post_count": 3,
-      "stance_score": -0.1109707575757575,
+      "stance_score": -0.1109707575757576,
       "stance_leaning": "alcaraz"
     },
     {

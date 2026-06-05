@@ -229,13 +229,13 @@ def run_nlp_enrichment(df, output_filepath="data/sinner_alcaraz_processed.csv"):
 def analyze_community_sentiment_polarization(df, Gu, node_to_community, communities,
                                               output_dir, title_suffix=""):
     """
-    Join Louvain community IDs back to post-level data and compare
-    sentiment profiles across communities.
+    Join community IDs back to post-level data and compare
+    sentiment profiles across communities, filtered by handles in Gu nodes.
     """
     author_community = {}
     for _, row in df.iterrows():
         handle = row.get('author_handle')
-        if handle and handle in node_to_community:
+        if handle and handle in node_to_community and handle in Gu.nodes():
             author_community[handle] = node_to_community[handle]
 
     df = df.copy()
@@ -285,7 +285,10 @@ def analyze_community_sentiment_polarization(df, Gu, node_to_community, communit
         f"Sentiment Distribution per Community (Top {top_n} by size){title_suffix}\n"
         f"Kruskal-Wallis H={kw_stat:.3f}, p={kw_p:.4f}"
     )
-    ax.set_xlabel("Community (Louvain partition)")
+    if "infomap" in title_suffix.lower():
+        ax.set_xlabel("Community (Infomap partition)")
+    else:
+        ax.set_xlabel("Community (Louvain partition)")
     ax.set_ylabel("VADER Compound Sentiment Score")
     ax.legend()
     plt.tight_layout()
