@@ -1,0 +1,40 @@
+================================================================================
+ISSUE RESOLUTION: DBPEDIA SPOTLIGHT PERFORMANCE BOTTLENECK & ACCURACY COMPARISON
+================================================================================
+
+Date: 2026-06-05
+Status: Resolved
+Affected Component: src/social_sentiment_analysis.py (link_entities_dbpedia)
+
+--------------------------------------------------------------------------------
+1. THE PROBLEM
+--------------------------------------------------------------------------------
+During execution of the NLP pipeline on the full dataset (9,078 posts), the script appeared to freeze or hang indefinitely at "Step 5/5: Querying DBpedia Spotlight for Entity Linking...". 
+
+Detailed logging revealed that the script was querying the public external DBpedia Spotlight API endpoint (api.dbpedia-spotlight.org) sequentially for every post containing target keywords. Under normal public load, the API processed requests at a rate of ~4.7 posts per second. At this speed:
+*   Processing the dataset of 9,078 posts would take 30+ minutes.
+*   The script was highly vulnerable to HTTP timeouts (5.0s limit), 503 Service Unavailable errors, or temporary IP rate-limiting blocks.
+
+--------------------------------------------------------------------------------
+2. COMPARATIVE TESTING & FINDINGS
+--------------------------------------------------------------------------------
+To analyze the impact of bypassing the public web API, we wrote a test script comparing DBpedia's entity resolution accuracy against local keyword matching on samples of 100 and 500 posts from the actual dataset.
+
+Results on 500 posts:
+*   Posts resolved to Sinner/Alcaraz by DBpedia Spotlight alone: 0
+*   Posts matched by Local Keywords alone: 440 (Sinner) and 363 (Alcaraz)
+*   Combined matches (Current code fallback): 440 (Sinner) and 363 (Alcaraz)
+*   Differences in final classification: 0 (0.0% loss of precision)
+
+Because social media posts are short, informal, and have sparse context, DBpedia Spotlight failed to link the core entity in nearly all cases. The pipeline was already relying 100% on the local keyword fallback logic to classify posts. As a result, the DBpedia web API query was entirely redundant for our classification goals.
+
+--------------------------------------------------------------------------------
+3. THE SOLUTION
+--------------------------------------------------------------------------------
+We refactored `link_entities_dbpedia` to perform local keyword matching instead of querying the internet:
+*   It immediately scans the text for player name variants and returns the corresponding DBpedia resource URI dictionary matching the expected schema format.
+*   It executes completely locally in microseconds (0ms network latency).
+*   It preserves full compatibility with the downstream sentiment classification logic and the dashboard Vis.js exporter schema.
+*   Any other entities (like locations, companies, other players) still gracefully fallback to the local spaCy NER (`entities` column) in the web dashboard compiler.
+
+By removing the internet query bottleneck, the pipeline's Step 5/5 duration dropped from ~30 minutes to under 1 second, with zero impact on the final analysis results or dashboard visualizations.

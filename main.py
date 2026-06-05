@@ -6,9 +6,7 @@ import numpy as np
 random.seed(42)
 np.random.seed(42)
 
-# Ensure src/ is in the import path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
-# Ensure web/ is in the import path for export_dashboard_data
 sys.path.append(os.path.join(os.path.dirname(__file__), 'web'))
 
 from preprocessing import load_and_preprocess_data
@@ -29,7 +27,6 @@ def main():
         print(f"[INFO] Processed dataset found at {processed_filepath}. Loading it directly...")
         df_processed = pd.read_csv(processed_filepath, parse_dates=['created_at'])
         
-        # Parse list columns stored as strings
         from utils import parse_list_col, build_did_to_handle
         for col in ['mentions', 'hashtags', 'links', 'linked_entities']:
             if col in df_processed.columns:
