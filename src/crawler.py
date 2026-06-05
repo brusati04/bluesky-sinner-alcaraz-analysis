@@ -263,8 +263,8 @@ if __name__ == "__main__":
     until_iso = "2025-09-10T00:00:00.000Z"
     
     QUERIES = {
-        "sinner": '(jannik | sinner) (tennis | usopen | "us open" | alcaraz | slam | match)',
-        "alcaraz": 'alcaraz (tennis | usopen | "us open" | sinner | slam | match)',
+        "sinner": '(jannik | sinner | Jannik | Sinner) (tennis | usopen | "us open" | alcaraz | slam | match)',
+        "alcaraz": '(alcaraz | Alcaraz) (tennis | usopen | "us open" | sinner | slam | match)',
     }
     
     MAX_POSTS_PER_DAY = 5000
