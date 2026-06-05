@@ -69,7 +69,10 @@ def build_did_to_handle(df):
             did_to_handle[did] = handle
     return did_to_handle
 
-def save_plot_copies(filename):
-    """Save the current figure to both plots/ and report/ directories."""
-    plt.savefig(os.path.join("plots", filename), dpi=300, bbox_inches='tight')
-    plt.savefig(os.path.join("report", filename), dpi=300, bbox_inches='tight')
+def save_plot_copies(filename, output_dir="plots"):
+    """Save the current figure to output_dir/ and the mirrored report/ directory."""
+    os.makedirs(output_dir, exist_ok=True)
+    plt.savefig(os.path.join(output_dir, filename), dpi=300, bbox_inches='tight')
+    report_dir = output_dir.replace("plots", "report", 1)
+    os.makedirs(report_dir, exist_ok=True)
+    plt.savefig(os.path.join(report_dir, filename), dpi=300, bbox_inches='tight')

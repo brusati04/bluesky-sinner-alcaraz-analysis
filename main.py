@@ -14,7 +14,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'web'))
 from preprocessing import load_and_preprocess_data
 from social_network_analysis import (build_networks, calculate_centralities,
                                       run_community_detection, save_initial_centrality_csv,
-                                      plot_network_graphs)
+                                      plot_network_graphs, plot_filtered_network_graph)
 from social_sentiment_analysis import (run_nlp_enrichment, analyze_community_sentiment_polarization,
                                         run_stance_propagation, plot_emotion_distribution,
                                         plot_sentiment_distribution, plot_sentiment_over_time,
@@ -89,7 +89,8 @@ def main():
     
     # Generate network graph visualizations
     plot_network_graphs(Gu, Gd, stance_results["df_cent"], comm_data, centralities, stance_results, output_dir="plots")
-    
+    plot_filtered_network_graph(Gu, Gd, stance_results["df_cent"], comm_data, centralities, stance_results, output_dir="plots/filtered")
+
     # Generate sentiment and NLP visualizations
     plot_sentiment_distribution(df_processed, output_dir="plots")
     plot_emotion_distribution(df_processed, output_dir="plots", title_suffix="")

@@ -296,9 +296,36 @@ def save_initial_centrality_csv(Gu, centralities, comm_data, filepath="data/netw
     return df_cent
 
 
-def plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities, stance_results, output_dir="plots"):
+def plot_filtered_network_graph(Gu, Gd, df_cent, comm_data, centralities, stance_results, min_component_size=10, output_dir="plots"):
+    """
+    Same as plot_network_graphs but drops connected components with <= min_component_size nodes.
+    Positions are computed from the full original graphs so surviving nodes stay in place.
+    Does not modify the original graphs.
+    """
+    # Compute layouts from the original graphs before filtering
+    nodes_with_edges = [n for n, d in Gu.degree() if d > 0]
+    pos = nx.spring_layout(Gu.subgraph(nodes_with_edges), k=0.15, iterations=40, seed=42)
+
+    nodes_with_edges_dir = [n for n, d in Gd.degree() if d > 0]
+    pos_dir = nx.spring_layout(Gd.subgraph(nodes_with_edges_dir), k=0.15, iterations=40, seed=42)
+
+    Gu_plot = Gu.copy()
+    for component in list(nx.connected_components(Gu_plot)):
+        if len(component) <= min_component_size:
+            Gu_plot.remove_nodes_from(component)
+
+    Gd_plot = Gd.copy()
+    for component in list(nx.weakly_connected_components(Gd_plot)):
+        if len(component) <= min_component_size:
+            Gd_plot.remove_nodes_from(component)
+
+    plot_network_graphs(Gu_plot, Gd_plot, df_cent, comm_data, centralities, stance_results, output_dir=output_dir, pos=pos, pos_dir=pos_dir)
+
+
+def plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities, stance_results, output_dir="plots", pos=None, pos_dir=None):
     """
     Generate the Louvain undirected, Stance, and PageRank directed network visualisations.
+    pos / pos_dir: precomputed layouts; if provided they are reused as-is (extra nodes are ignored).
     """
     deg_cent = centralities["deg_cent"]
     pagerank = centralities["pagerank"]
@@ -311,7 +338,8 @@ def plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities, stance_results
     nodes_in_relations = [n for n, d in Gu.degree() if d > 0]
     if len(nodes_in_relations) > 0:
         subG = Gu.subgraph(nodes_in_relations)
-        pos = nx.spring_layout(subG, k=0.15, iterations=40, seed=42)
+        if pos is None:
+            pos = nx.spring_layout(subG, k=0.15, iterations=40, seed=42)
         top_10_nodes = df_cent.sort_values(by="degree_centrality_undirected", ascending=False).head(10)['user'].tolist()
         labels_to_draw = {node: node for node in subG.nodes() if node in top_10_nodes}
     else:
@@ -336,7 +364,7 @@ def plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities, stance_results
     plt.title(f"Undirected Social Network Graph (degree centrality & Louvain partitions)\n(Modularity Q: {modularity_score:.4f})", pad=15)
     plt.axis("off")
     plt.tight_layout()
-    save_plot_copies("network_graph.png")
+    save_plot_copies("network_graph.png", output_dir=output_dir)
     plt.close()
 
     # 2. Stance Network Graph
@@ -357,7 +385,7 @@ def plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities, stance_results
     plt.title(f"Stance Network Graph (Direct Sentiment Average)\n(Stance Assortativity: {stance_assort:.4f})", pad=15)
     plt.axis("off")
     plt.tight_layout()
-    save_plot_copies("stance_network_graph.png")
+    save_plot_copies("stance_network_graph.png", output_dir=output_dir)
     plt.close()
 
     # 3. Directed Social Network Graph
@@ -365,7 +393,8 @@ def plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities, stance_results
     nodes_in_relations_dir = [n for n, d in Gd.degree() if d > 0]
     if len(nodes_in_relations_dir) > 0:
         subG_dir = Gd.subgraph(nodes_in_relations_dir)
-        pos_dir = nx.spring_layout(subG_dir, k=0.15, iterations=40, seed=42)
+        if pos_dir is None:
+            pos_dir = nx.spring_layout(subG_dir, k=0.15, iterations=40, seed=42)
 
         node_colors_dir = []
         infomap_communities = comm_data.get("infomap_communities", [])
@@ -395,5 +424,5 @@ def plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities, stance_results
     plt.title(f"Directed Social Network Graph (PageRank prestige & Infomap partitions)\n(Projected Modularity Q: {infomap_modularity:.4f})", pad=15)
     plt.axis("off")
     plt.tight_layout()
-    save_plot_copies("network_graph_directed.png")
+    save_plot_copies("network_graph_directed.png", output_dir=output_dir)
     plt.close()
