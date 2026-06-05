@@ -1,8 +1,9 @@
 import os
 import ast
 import json
+from typing import Any
+
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -18,20 +19,20 @@ plt.rcParams.update({
     'figure.titlesize': 16
 })
 
-# US Open 2025 Key Match Dates
+# US Open 2025 key match dates, used to annotate sentiment timelines.
 US_OPEN_EVENTS = [
-    ("2025-08-24", "US Open begins", "grey"),             
-    ("2025-08-25", "Alcaraz R1", "blue"),                  
-    ("2025-08-26", "Sinner R1", "blue"),                   
-    ("2025-08-27", "R2 matches", "blue"),                  
-    ("2025-08-30", "R3 matches", "blue"),                  
-    ("2025-09-01", "R4 matches", "blue"),                  
-    ("2025-09-03", "Quarterfinals", "orange"),             
-    ("2025-09-05", "Semifinals", "red"),                   
-    ("2025-09-07", "Final\n(Alcaraz wins)", "darkred"),    
+    ("2025-08-24", "US Open begins", "grey"),
+    ("2025-08-25", "Alcaraz R1", "blue"),
+    ("2025-08-26", "Sinner R1", "blue"),
+    ("2025-08-27", "R2 matches", "blue"),
+    ("2025-08-30", "R3 matches", "blue"),
+    ("2025-09-01", "R4 matches", "blue"),
+    ("2025-09-03", "Quarterfinals", "orange"),
+    ("2025-09-05", "Semifinals", "red"),
+    ("2025-09-07", "Final\n(Alcaraz wins)", "darkred"),
 ]
 
-# US Open 2025 Round Windows (for median sentiment per round plot)
+# US Open 2025 round windows, used to group median sentiment per round.
 US_OPEN_ROUNDS = [
     {"label": "Pre-Tournament", "start": "2025-08-21", "end": "2025-08-23"},
     {"label": "US Open begins",  "start": "2025-08-24", "end": "2025-08-24"},
@@ -45,34 +46,39 @@ US_OPEN_ROUNDS = [
     {"label": "Post-Final",      "start": "2025-09-08", "end": "2025-09-09"},
 ]
 
-def parse_list_col(val):
-    """Safely parse columns stored as string-formatted lists."""
-    if pd.isna(val):
-        return []
+
+def parse_list_col(val: Any) -> list:
+    """Parse a column value stored as a string-encoded list back into a Python list.
+
+    Returns an empty list for missing values or anything that cannot be parsed.
+    """
     if isinstance(val, list):
         return val
+    if pd.isna(val):
+        return []
     try:
         return ast.literal_eval(val)
-    except Exception:
+    except (ValueError, SyntaxError):
         try:
             return json.loads(val)
-        except Exception:
+        except (ValueError, TypeError):
             return []
 
-def build_did_to_handle(df):
-    """Build a DID -> handle mapping from the posts DataFrame."""
-    did_to_handle = {}
-    for _, row in df.iterrows():
-        did = row['author_did']
-        handle = row['author_handle']
+
+def build_did_to_handle(df: pd.DataFrame) -> dict[str, str]:
+    """Build a mapping from author DID to author handle using the posts DataFrame."""
+    did_to_handle: dict[str, str] = {}
+    for did, handle in zip(df['author_did'], df['author_handle']):
         if pd.notna(did) and pd.notna(handle):
             did_to_handle[did] = handle
     return did_to_handle
 
-def save_plot_copies(filename, output_dir="plots"):
-    """Save the current figure to output_dir/ and the mirrored report/ directory."""
+
+def save_plot_copies(filename: str, output_dir: str = "plots") -> None:
+    """Save the current Matplotlib figure to output_dir and to the mirrored report directory."""
     os.makedirs(output_dir, exist_ok=True)
     plt.savefig(os.path.join(output_dir, filename), dpi=300, bbox_inches='tight')
+
     report_dir = output_dir.replace("plots", "report", 1)
     os.makedirs(report_dir, exist_ok=True)
     plt.savefig(os.path.join(report_dir, filename), dpi=300, bbox_inches='tight')
