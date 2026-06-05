@@ -42,7 +42,7 @@
 \begin{abstract}
 This study presents a comprehensive, end-to-end social network analysis (SNA) and natural language processing (NLP) evaluation of the digital footprint surrounding the Jannik Sinner versus Carlos Alcaraz tennis rivalry on the decentralized microblogging platform Bluesky. By crawling \textbf{9,078 unique posts} strictly bounded within the temporal window of the \textbf{US Open 2025 (August 25 to September 8, 2025)}, we examine the structural and semantic properties of social communication. Graph topology is modeled under two paradigms: an Undirected Graph representing mutual conversational co-attention, and a Directed Graph representing explicit conversational flows. 
 
-Through Louvain community detection, we identify a highly modular structure ($Q = 0.9666$, 224 communities). Natural language processing models—including VADER sentiment scoring, NRC emotion lexicon matching, and local Named Entity Linking (NEL)—reveal a public discourse dominated by anticipatory tension and fear-related clusters, reflecting match outcomes and Sinner's doping controversy. Finally, we analyze the relationship between community structures and opinions through four multi-faceted studies: polarization and echo chambers, emotional profiling, aspect-based sentiment analysis, and subjectivity versus user influence. Our findings demonstrate that structurally isolated sub-communities exhibit distinct emotional and attitudinal registers, while high-influence users tend to maintain more objective language.
+Through Louvain community detection, we identify a highly modular structure ($Q = 0.9666$, 224 communities). Natural language processing models—including VADER sentiment scoring, NRC emotion lexicon matching, and local Named Entity Linking (NEL)—reveal a public discourse dominated by anticipatory tension and fear-related clusters, reflecting match outcomes and Sinner's doping controversy. Finally, we analyze the relationship between community structures and emotional profiles by performing an emotional profiling analysis strictly on the filtered communities. Our findings demonstrate that structurally isolated sub-communities exhibit distinct emotional signatures under both Louvain and Infomap community definitions.
 \end{abstract}
 
 \newpage
@@ -53,7 +53,7 @@ The rivalry between Jannik Sinner and Carlos Alcaraz has emerged as the defining
 This paper investigates the conversational structures and sentiments surrounding these two players on the decentralized social network \textbf{Bluesky} during the \textbf{US Open 2025}. Specifically, this study addresses three core Research Questions:
 \begin{enumerate}
     \item \textbf{RQ1: Structural Characteristics.} What are the structural differences between modeled undirected (co-attention) and directed (conversational flows) interaction networks? Does a Giant Connected Component emerge?
-    \item \textbf{RQ2: Community Sentiment Dynamics.} How do structurally isolated sub-communities compare across stance polarization, emotional profiles, and aspect-based sentiment, and how does subjectivity relate to user centrality?
+    \item \textbf{RQ2: Community Emotional Profiles.} How do the emotional profiles of structurally isolated, filtered sub-communities compare across different community detection algorithms?
     \item \textbf{RQ3: Semantic Profile.} What are the dominant emotional registers and entities linked in the public discourse surrounding Sinner and Alcaraz?
 \end{enumerate}
 
@@ -154,109 +154,106 @@ The analysis reveals that institutional accounts such as \texttt{thetennisletter
 \section{Natural Language Processing (NLP)}
 
 \subsection{Sentiment Distribution}
-Sentiment was evaluated utilizing VADER (Valence Aware Dictionary and sEntiment Reasoner), yielding the distribution shown in Figure~\ref{fig:sentiment_dist}. The overall sentiment has a neutral-to-positive skew, with positive posts accounting for 35.5\% of the corpus, neutral posts at 47.6\%, and negative posts at 16.8\%.
+Sentiment was evaluated utilizing VADER (Valence Aware Dictionary and sEntiment Reasoner). The overall sentiment has a neutral-to-positive skew, as summarized in Table~\ref{tab:sentiment_dist}. Positive posts account for 35.5\% of the corpus, neutral posts for 47.6\%, and negative posts for 16.8\%.
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.7\textwidth]{sentiment_distribution.png}
-    \caption{Distribution of VADER Sentiment Categories.}
-    \label{fig:sentiment_dist}
-\end{figure}
+\begin{table}[H]
+\centering
+\caption{VADER Sentiment Category Distribution}
+\label{tab:sentiment_dist}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Sentiment Category} & \textbf{Post Percentage} \\
+\midrule
+Positive & 35.5\% \\
+Neutral & 47.6\% \\
+Negative & 16.8\% \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Emotion Profiling}
-An emotion lexicon mapping based on the NRC Emotion Lexicon was applied. The analysis reveals a distinct dominant emotion layout:
-\begin{itemize}
-    \item \textbf{Anticipation (1,237 posts)}: Driven by pre-match hype, tournament draws, and expectations of Sinner/Alcaraz matches.
-    \item \textbf{Fear (1,134 posts)}: High prevalence driven by discussions regarding the doping scandal surrounding Sinner (Clostebol case) and fears of tournament exclusions or player injuries.
-    \item \textbf{Trust (707 posts) \& Anger (407 posts)}: Reflecting fan loyalty and polarized debates on administrative transparency.
-\end{itemize}
+An emotion lexicon mapping based on the NRC Emotion Lexicon was applied. The analysis reveals a distinct dominant emotion layout, summarized in Table~\ref{tab:emotion_dist}. Anticipation remains the highest registered emotion (driven by pre-match hype, tournament draws, and expectations of Sinner/Alcaraz matches), followed closely by Fear (driven by Sinner's Clostebol doping scandal).
 
-\begin{figure}[H]
-    \centering
-    \begin{subfigure}[b]{0.48\textwidth}
-        \includegraphics[width=\textwidth]{emotion_distribution.png}
-        \caption{Global Emotion Mean Scores}
-        \label{fig:emo_global}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[b]{0.48\textwidth}
-        \includegraphics[width=\textwidth]{emotion_rivalry_comparison.png}
-        \caption{Player-Specific Emotion Profiles}
-        \label{fig:emo_rivalry}
-    \end{subfigure}
-    \caption{NRC Lexicon Emotion Profiles.}
-    \label{fig:emotions_visual}
-\end{figure}
+\begin{table}[H]
+\centering
+\caption{NRC Lexicon Emotion Category Distribution}
+\label{tab:emotion_dist}
+\begin{tabular}{lc}
+\toprule
+\textbf{Emotion Category} & \textbf{Number of Posts} \\
+\midrule
+Anticipation & 1,237 \\
+Fear & 1,134 \\
+Trust & 707 \\
+Anger & 407 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Named Entity Linking (NEL)}
-By running Named Entity Recognition (NER) followed by a local Named Entity Linking mapping optimized for the core rivalry entities, we extracted and linked the key subjects to DBpedia URIs. The top linked entities are:
-\begin{enumerate}
-    \item \textbf{Carlos Alcaraz} (\texttt{http://dbpedia.org/resource/Carlos\_Alcaraz}): 6,513 mentions
-    \item \textbf{Jannik Sinner} (\texttt{http://dbpedia.org/resource/Jannik\_Sinner}): 6,350 mentions
-\end{enumerate}
+By running Named Entity Recognition (NER) followed by a local Named Entity Linking mapping optimized for the core rivalry entities, we extracted and linked the key subjects to DBpedia URIs. The comparative volume and average sentiments are summarized in Table~\ref{tab:player_comparison}. Carlos Alcaraz received slightly more mention volume (6,530 vs. 6,366) and displayed a higher average sentiment score (0.1337 vs. 0.1170) compared to Jannik Sinner.
 
-Comparing Sinner and Alcaraz directly (Figure~\ref{fig:rivalry_comp}), Alcaraz received slightly more mention volume (6,530 vs. 6,366), and displayed a higher average sentiment score (0.1337 vs. 0.1170).
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.75\textwidth]{rivalry_comparison.png}
-    \caption{Comparison of Player Mentions vs. Average VADER Sentiment Score.}
-    \label{fig:rivalry_comp}
-\end{figure}
+\begin{table}[H]
+\centering
+\caption{Comparison of Rivalry Player Mention Volume and Average VADER Sentiment}
+\label{tab:player_comparison}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Player} & \textbf{Mention Volume} & \textbf{Avg. VADER Sentiment} \\
+\midrule
+Carlos Alcaraz & 6,530 & 0.1337 \\
+Jannik Sinner & 6,366 & 0.1170 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Temporal Sentiment Dynamics}
-As plotted in Figure~\ref{fig:sentiment_time}, the rolling sentiment dynamics reflect the key events of the US Open 2025. Pre-match tension and doping queries caused a downward pressure on sentiment in late August, followed by recovery during the match days.
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.85\textwidth]{sentiment_over_time.png}
-    \caption{Sentiment Dynamics Over Time (30-Post Rolling Average) with US Open 2025 Match Events.}
-    \label{fig:sentiment_time}
-\end{figure}
+The rolling sentiment dynamics reflect the key events of the US Open 2025. Pre-match tension and doping queries caused a downward pressure on sentiment in late August (reaching a local minimum around the announcement of Sinner's doping case results), followed by a steady recovery and stabilization during the actual tournament match days as the athletic competition took center stage.
 
 ---
 
-\section{Attitudinal Polarization \& Community Sentiment Analysis}
-To address \textbf{RQ2}, we map the structural communities identified by Louvain partitioning back to their post-level sentiment profiles and explore their underlying opinions across four multi-faceted community studies.
+\section{Community Emotional Profiling Analysis}
+To address \textbf{RQ2}, we map the structural communities identified by Louvain (undirected) and Infomap (directed) partitioning back to their post-level emotion profiles and explore their emotional footprints. As requested, we isolate this analysis strictly to the emotional profiling of communities (Study 2) on the filtered subgraphs.
 
-\subsection{Study 1: Polarization and Echo Chamber Analysis}
-We classify individual community members by their net stance leaning (Pro-Sinner, Pro-Alcaraz, or Neutral) computed from their average post sentiments. Figure~\ref{fig:community_echo_chambers} illustrates the user stance distribution across the top 5 largest communities. We observe distinct echo-chamber tendencies, where some communities are dominated by neutral/analytical posts, whereas others show higher proportions of polarized support for either player.
+\subsection{Study 2: Emotional Profiling of Filtered Communities}
+By correlating the filtered partitions (retaining components with $>10$ nodes and keeping the top 3 communities by node count) with the NRC emotion scores of their posts, we analyze the emotional profiles of the communities.
+
+To maintain strict visual consistency, we employ the qualitative \texttt{tab20} discrete color palette consistently across both the network visualizations and the emotion profiling bar charts.
+
+Figures~\ref{fig:filtered_networks} and \ref{fig:community_emotions_comparison} show the filtered networks and their corresponding average emotion profiles for the top 3 Louvain (undirected) and Infomap (directed) communities.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.65\textwidth]{community_echo_chambers_Louvain.png}
-    \caption{User Stance Distribution per Community (Louvain Echo Chamber Profile).}
-    \label{fig:community_echo_chambers}
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{filtered/network_graph.png}
+        \caption{Filtered Undirected Graph (Louvain)}
+        \label{fig:filtered_undirected}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{filtered/network_graph_directed.png}
+        \caption{Filtered Directed Graph (Infomap)}
+        \label{fig:filtered_directed}
+    \end{subfigure}
+    \caption{Filtered network visualizations focusing on the top 3 communities.}
+    \label{fig:filtered_networks}
 \end{figure}
 
-\subsection{Study 2: Emotional Profiling of Communities}
-By correlating the Louvain partitions with the NRC emotion scores of their posts, we analyze the emotional profiles of the top 3 largest communities (Figure~\ref{fig:community_emotions}). Using a synchronized color-scheme aligned with the main network graphs (Teal, Orange, Purple for communities in size rank order), we compare the average normalized score for 8 primary emotions. We observe that anticipation and fear remain the dominant emotional markers across all communities, though the relative proportions of trust and anger vary, reflecting localized fan responses.
-
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.75\textwidth]{community_emotion_profiles_Louvain.png}
-    \caption{Average Emotion Profiles per Community (NRC Emotion Lexicon comparison).}
-    \label{fig:community_emotions}
-\end{figure}
-
-\subsection{Study 3: Aspect-Based Sentiment Analysis}
-To understand the semantic focus of these communities, we run Aspect-Based Sentiment Analysis (ABSA) across three core aspects: Match Play/Contest, controversies (e.g., doping, Clostebol), and player rivalry. Figure~\ref{fig:community_aspect_sentiment} compares the mean VADER compound sentiment towards these aspects across the top 3 communities. Sentiment towards Match Play and Rivalry is generally positive, whereas sentiment towards controversies is near neutral, indicating distinct reactions to Sinner's doping case.
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.65\textwidth]{community_aspect_sentiment_Louvain.png}
-    \caption{Aspect-Based Sentiment per Community across Core Topics.}
-    \label{fig:community_aspect_sentiment}
-\end{figure}
-
-\subsection{Study 4: Subjectivity vs. Centrality of Influencers and Hubs}
-Finally, we study the linguistic subjectivity of users (measured by the ratio of adjectives and adverbs to total tokens using spaCy POS tagging) relative to their PageRank centrality in the directed network. Figure~\ref{fig:subjectivity_vs_centrality} displays this correlation. The regression shows a Pearson correlation of $r = 0.0434$ with a $p$-value of $0.3483$. This indicates a very weak, statistically non-significant correlation, suggesting that high-influence users (PageRank hubs) on Bluesky exhibit a similar balance of subjectivity and objectivity compared to low-centrality users.
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.6\textwidth]{subjectivity_vs_centrality.png}
-    \caption{User Subjectivity vs. PageRank Influence.}
-    \label{fig:subjectivity_vs_centrality}
+    \begin{subfigure}[b]{0.49\textwidth}
+        \includegraphics[width=\textwidth]{community_emotion_profiles_Louvain_-_Filtered.png}
+        \caption{Louvain Communities (Undirected)}
+        \label{fig:emo_louvain}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.49\textwidth}
+        \includegraphics[width=\textwidth]{community_emotion_profiles_Infomap_-_Filtered.png}
+        \caption{Infomap Communities (Directed)}
+        \label{fig:emo_infomap}
+    \end{subfigure}
+    \caption{Average normalized emotion scores for the top 3 communities (NRC Emotion Lexicon comparison).}
+    \label{fig:community_emotions_comparison}
 \end{figure}
 
 ---

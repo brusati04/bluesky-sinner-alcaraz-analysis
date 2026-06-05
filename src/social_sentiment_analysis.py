@@ -226,11 +226,12 @@ def run_nlp_enrichment(df, output_filepath="data/sinner_alcaraz_processed.csv"):
     }
 
 
-def plot_community_emotion_profiles(df, Gu, node_to_community, communities, output_dir="plots", title_suffix="", top_k=3, sort_by="node_count"):
+def plot_community_emotion_profiles(df, Gu, node_to_community, communities, output_dir="plots", title_suffix="", top_k=3, sort_by="node_count", cmap_name="viridis"):
     """
     Study 2: Emotional Profiling of Communities.
     Compare average scores of 8 NRC emotions across the top k filtered communities.
     sort_by: "node_count" or "post_volume" to select/sort top communities.
+    cmap_name: colormap to use for community colors.
     """
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs("report", exist_ok=True)
@@ -277,7 +278,7 @@ def plot_community_emotion_profiles(df, Gu, node_to_community, communities, outp
         return
 
     from social_network_analysis import get_community_color_map
-    color_map = get_community_color_map(node_to_community)
+    color_map = get_community_color_map(node_to_community, cmap_name=cmap_name)
     custom_palette = {}
     for cid in top_comms:
         comm_posts = df_with_comm[df_with_comm['community_id'] == cid]

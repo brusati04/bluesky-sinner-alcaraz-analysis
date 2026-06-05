@@ -296,22 +296,31 @@ def save_initial_centrality_csv(Gu, centralities, comm_data, filepath="data/netw
     return df_cent
 
 
-def get_community_color_map(node_to_community):
-    from collections import Counter
-    import colorsys
-    counts = Counter(node_to_community.values())
-    sorted_comm_ids = [cid for cid, count in counts.most_common()]
+def get_community_color_map(node_to_community, cmap_name="viridis"):
+    import matplotlib.pyplot as plt
+    import matplotlib.colors as mcolors
     
+    unique_cids = sorted(list(set(node_to_community.values())))
+    N = len(unique_cids)
+    
+    try:
+        cmap = plt.colormaps.get_cmap(cmap_name)
+    except AttributeError:
+        cmap = plt.cm.get_cmap(cmap_name)
+        
+    qualitative_prefixes = ('pastel', 'paired', 'accent', 'dark2', 'set', 'tab')
+    is_qualitative = cmap_name.lower().startswith(qualitative_prefixes)
+        
     color_map = {}
-    for idx, cid in enumerate(sorted_comm_ids):
-        # Use golden ratio spacing for maximum hue distinguishability
-        h = (idx * 0.618033988749895) % 1.0
-        # Saturation of 85%, Lightness of 50% for vibrant, visible colors
-        s = 0.85
-        l = 0.50
-        r, g, b = colorsys.hls_to_rgb(h, l, s)
-        hex_color = '#%02x%02x%02x' % (int(r*255), int(g*255), int(b*255))
-        color_map[cid] = hex_color
+    for idx, cid in enumerate(unique_cids):
+        if is_qualitative:
+            # For discrete/qualitative colormaps, map directly to distinct colors modulo colormap size
+            rgba = cmap(idx % cmap.N)
+        else:
+            # Spread the colors evenly along the colormap from 0 to 1
+            pos = idx / (N - 1) if N > 1 else 0.5
+            rgba = cmap(pos)
+        color_map[cid] = mcolors.to_hex(rgba)
     return color_map
 
 
@@ -329,7 +338,7 @@ def get_filtered_networks(Gu, Gd, min_component_size=10):
     return Gu_filtered, Gd_filtered
 
 
-def plot_filtered_network_graph(Gu, Gd, df_cent, comm_data, centralities, df_processed, min_component_size=10, output_dir="plots", top_k=3, sort_by="node_count"):
+def plot_filtered_network_graph(Gu, Gd, df_cent, comm_data, centralities, df_processed, min_component_size=10, output_dir="plots", top_k=3, sort_by="node_count", cmap_undirected="viridis", cmap_directed="inferno"):
     """
     Same as plot_network_graphs but drops connected components with <= min_component_size nodes,
     and filters to keep only the top k communities (selected by node count or post volume).
@@ -397,10 +406,10 @@ def plot_filtered_network_graph(Gu, Gd, df_cent, comm_data, centralities, df_pro
     nodes_with_edges_dir = [n for n, d in Gd.degree() if d > 0]
     pos_dir = nx.spring_layout(Gd.subgraph(nodes_with_edges_dir), k=0.15, iterations=40, seed=42)
 
-    plot_network_graphs(Gu_plot, Gd_plot, df_cent, comm_data, centralities, output_dir=output_dir, pos=pos, pos_dir=pos_dir)
+    plot_network_graphs(Gu_plot, Gd_plot, df_cent, comm_data, centralities, output_dir=output_dir, pos=pos, pos_dir=pos_dir, cmap_undirected=cmap_undirected, cmap_directed=cmap_directed)
 
 
-def plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities, output_dir="plots", pos=None, pos_dir=None):
+def plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities, output_dir="plots", pos=None, pos_dir=None, cmap_undirected="viridis", cmap_directed="inferno"):
     """
     Generate the Louvain undirected and PageRank directed network visualisations.
     pos / pos_dir: precomputed layouts; if provided they are reused as-is (extra nodes are ignored).
@@ -424,7 +433,7 @@ def plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities, output_dir="pl
 
     # 1. Louvain Network Graph
     plt.figure(figsize=(12, 12))
-    louvain_color_map = get_community_color_map(node_to_community)
+    louvain_color_map = get_community_color_map(node_to_community, cmap_name=cmap_undirected)
     node_colors = [louvain_color_map.get(node_to_community.get(node, 0), "#bdc3c7") for node in subG.nodes()]
         
     node_sizes = [50 + (deg_cent[node] * 1200) for node in subG.nodes()]
@@ -449,7 +458,7 @@ def plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities, output_dir="pl
         node_to_infomap = comm_data.get("node_to_infomap", {})
         infomap_modularity = comm_data.get("infomap_modularity", 0.0)
 
-        infomap_color_map = get_community_color_map(node_to_infomap)
+        infomap_color_map = get_community_color_map(node_to_infomap, cmap_name=cmap_directed)
         node_colors_dir = [infomap_color_map.get(node_to_infomap.get(node, 0), "#bdc3c7") for node in subG_dir.nodes()]
 
         node_sizes_dir = [50 + (pagerank.get(node, 0.0) * 18000) for node in subG_dir.nodes()]

@@ -1,6 +1,7 @@
 import os
 import sys
 import random
+import pandas as pd
 import numpy as np
 
 random.seed(42)
@@ -78,18 +79,20 @@ def main():
     # Retrieve filtered subgraphs (aligned with the plots in the 'filtered' folder)
     Gu_filtered, Gd_filtered = get_filtered_networks(Gu, Gd, min_component_size=10)
 
-    # Configuration for Study 2: Emotional Profiling selection filter
-    TOP_K_COMMUNITIES = 3          # Limit to top k communities
-    SORT_BY_CRITERIA = "node_count" # "node_count" or "post_volume"
-
-    # 2. Study 2: Emotional Profiling of Communities (strictly filtered)
-    plot_community_emotion_profiles(df_processed, Gu_filtered, comm_data["node_to_louvain"], comm_data["louvain_communities"], output_dir="plots", title_suffix=" (Louvain - Filtered)", top_k=TOP_K_COMMUNITIES, sort_by=SORT_BY_CRITERIA)
-    plot_community_emotion_profiles(df_processed, Gd_filtered, comm_data["node_to_infomap"], comm_data["infomap_communities"], output_dir="plots", title_suffix=" (Infomap - Filtered)", top_k=TOP_K_COMMUNITIES, sort_by=SORT_BY_CRITERIA)
+    # Configuration for Study 2: Emotional Profiling selection filter & Colormaps
+    TOP_K_COMMUNITIES = 5        
+    SORT_BY_CRITERIA = "post_volume" # or "node_count"
+    CMAP_UNDIRECTED = "tab20"      
+    CMAP_DIRECTED = "tab20"         
 
     # Generate network graph visualizations
-    plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities, output_dir="plots")
-    plot_filtered_network_graph(Gu, Gd, df_cent, comm_data, centralities, df_processed=df_processed, output_dir="plots/filtered", top_k=TOP_K_COMMUNITIES, sort_by=SORT_BY_CRITERIA)
+    plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities, output_dir="plots", cmap_undirected=CMAP_UNDIRECTED, cmap_directed=CMAP_DIRECTED)
+    plot_filtered_network_graph(Gu, Gd, df_cent, comm_data, centralities, df_processed=df_processed, output_dir="plots/filtered", top_k=TOP_K_COMMUNITIES, sort_by=SORT_BY_CRITERIA, cmap_undirected=CMAP_UNDIRECTED, cmap_directed=CMAP_DIRECTED)
+
+    # Sentiment Study: Emotional Profiling of Communities filtered over the top k communities
+    plot_community_emotion_profiles(df_processed, Gu_filtered, comm_data["node_to_louvain"], comm_data["louvain_communities"], output_dir="plots", title_suffix=" (Louvain - Filtered)", top_k=TOP_K_COMMUNITIES, sort_by=SORT_BY_CRITERIA, cmap_name=CMAP_UNDIRECTED)
+    plot_community_emotion_profiles(df_processed, Gd_filtered, comm_data["node_to_infomap"], comm_data["infomap_communities"], output_dir="plots", title_suffix=" (Infomap - Filtered)", top_k=TOP_K_COMMUNITIES, sort_by=SORT_BY_CRITERIA, cmap_name=CMAP_DIRECTED)
+
 
 if __name__ == "__main__":
-    import pandas as pd
     main()
