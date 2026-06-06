@@ -83,37 +83,30 @@ def preprocess(text: Optional[str]) -> str:
     return " ".join(filtered_tokens)
 
 
-def load_and_preprocess_data(filepath: str = "data/sinner_alcaraz_posts.csv") -> tuple[Optional[pd.DataFrame], Optional[dict]]:
-    """Load raw crawled posts, parse timestamps and list columns, and build the DID->handle map.
-
-    Returns (None, None) if the raw file is missing.
-    """
+def load_data(filepath: str, parse_linked_entities: bool = False) -> tuple[Optional[pd.DataFrame], Optional[dict]]:
+    """Load, parse dates/lists, and build DID->handle map for raw or processed datasets."""
     for directory in ("data", "plots", "report"):
         os.makedirs(directory, exist_ok=True)
 
     try:
         df = pd.read_csv(filepath)
     except FileNotFoundError:
-        print(f"Error: {filepath} not found! Run the crawler first.")
+        print(f"Error: {filepath} not found!")
         return None, None
 
+    # Parse timestamps
     df['created_at'] = pd.to_datetime(df['created_at'], errors='coerce', format='mixed')
     df = df.dropna(subset=['created_at'])
 
-    for col in ['hashtags', 'mentions', 'links']:
-        if col in df.columns:
-            df[col] = df[col].apply(parse_list_col)
+    # Parse list columns
+    list_columns = ['mentions', 'hashtags', 'links']
+    if parse_linked_entities:
+        list_columns.append('linked_entities')
 
-    return df, build_did_to_handle(df)
-
-
-def load_processed_data(filepath: str) -> tuple[pd.DataFrame, dict]:
-    """Load an already NLP-enriched dataset from CSV, restoring list columns and the DID->handle map."""
-    df = pd.read_csv(filepath, parse_dates=['created_at'])
-    list_columns = ['mentions', 'hashtags', 'links', 'linked_entities']
     for col in list_columns:
         if col in df.columns:
             df[col] = df[col].apply(parse_list_col)
+
     return df, build_did_to_handle(df)
 
 
@@ -125,9 +118,9 @@ def prepare_dataset(raw_filepath: str, processed_filepath: str) -> tuple[Optiona
     """
     if os.path.exists(processed_filepath):
         print(f"[INFO] Processed dataset found at {processed_filepath}. Loading it directly...")
-        return load_processed_data(processed_filepath)
+        return load_data(processed_filepath, parse_linked_entities=True)
 
-    df, did_to_handle = load_and_preprocess_data(raw_filepath)
+    df, did_to_handle = load_data(raw_filepath, parse_linked_entities=False)
     if df is None:
         return None, None
 
