@@ -12,7 +12,7 @@ polarisation.
 
 ## Key findings
 
-Computed on the crawled dataset of **23,409 posts**:
+Computed on the crawled dataset of **9,078 posts**:
 
 - **Sparse, modular network.** The interaction graph has density ≈ 0.002 with very high
   community modularity (Louvain ≈ 0.97, Infomap ≈ 0.94) — fans cluster tightly into
@@ -22,19 +22,12 @@ Computed on the crawled dataset of **23,409 posts**:
 - **Sentiment tracks match outcomes.** The sentiment time series reacts to key matches,
   with each fanbase diverging after wins and losses (notably the final).
 - **Sentiment-aware stance beats frequency baselines.** Fusing RoBERTa sentiment with
-  mention frequency reclassifies users whose tone contradicts who they mention most
-  (e.g. mentioning a player only to criticise them).
+  mention frequency reclassifies users by their stance (Sinner/Alcaraz/Neutral) against a simple raw count of mentions-.
 
 > A full write-up with methodology and discussion is in [`report/report.tex`](report/report.tex).
-> Note that some narrative figures in the report are illustrative; the authoritative numbers
-> are the ones produced by running the pipeline on the data in `data/`.
 
 ## Pipeline architecture
 
-The project is a **strict, ordered DAG** of analysis stages (see [`main.py`](main.py)).
-Each stage reads only the artifacts of an upstream stage, and the single source of truth is
-the **frozen processed CSV** produced by the preprocessing stage — downstream stages never
-rewrite it.
 
 ```
 [1] crawl       src/crawler.py (run separately)  ->  data/sinner_alcaraz_posts.csv
@@ -64,18 +57,16 @@ limits. Results are merged and deduplicated by post URI.
   (positive/neutral/negative) and a continuous `sentiment_compound` = P(pos) − P(neg).
 - **Emotion (two backends):** the **NRC lexicon** (NRCLex) and **GoEmotions**
   (`SamLowe/roberta-base-go_emotions`), whose 28 fine-grained labels are collapsed onto the
-  8 Plutchik/NRC categories for side-by-side comparison.
+  8 Plutchik/NRC categories for side-by-side comparison between Transformers architecture and a lexicon algorithm.
 
-**Stance.** Single-mention posts assign the post's compound score to that player;
-dual-mention posts are split via sentence-level sentiment. User-level net stance fuses mean
-sentiment and mention frequency:
+**Stance.** A stance detection algorithm was implemented: Single-mention posts assign the post's compound score to that player; dual-mention posts are split via sentence-level sentiment. User-level net stance fuses mean sentiment and mention frequency:
 
 ```
 net_stance = 0.50 · (mean_sinner − mean_alcaraz) + 0.15 · (freq_sinner − freq_alcaraz)
 ```
 
 (the remaining 0.35 weight is reserved for a future emotion-based component). Users are
-labelled `sinner` / `alcaraz` / `neutral` with a ±0.05 threshold.
+labelled `sinner` / `alcaraz` / `neutral` with a ±0.03 threshold (that can be adjusted in the constants section).
 
 **Network.** Nodes are users; edges are replies/mentions. Centrality (degree, closeness,
 betweenness, in/out-degree, PageRank) and communities (Louvain on `Gu`, Infomap on `Gd`)
