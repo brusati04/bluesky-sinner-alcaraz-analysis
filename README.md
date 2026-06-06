@@ -75,7 +75,7 @@ used for visualisation and stance analysis.
 
 ## Installation
 
-Requires **Python 3.10+** (the code uses `X | Y` type-hint syntax).
+Requires **Python 3.10+**.
 
 ```bash
 git clone https://github.com/brusati04/bluesky-sinner-alcaraz-analysis.git
@@ -110,14 +110,15 @@ plots in `data/` and `plots/`.
 To rebuild the raw dataset you need Bluesky credentials. Create a `.env` file:
 
 ```bash
+# create one in Bluesky Settings → App Passwords
 BSKY_HANDLE=your-handle.bsky.social
-BSKY_APP_PASSWORD=your-app-password   # create one in Bluesky Settings → App Passwords
+BSKY_APP_PASSWORD=your-app-password   
 ```
 
 Then run the crawler, and delete the processed cache so `main.py` re-enriches from scratch:
 
 ```bash
-python src/crawler.py                       # writes data/sinner_alcaraz_posts.csv
+python src/crawler.py
 rm data/sinner_alcaraz_processed.csv
 python main.py
 ```
