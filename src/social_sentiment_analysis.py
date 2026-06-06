@@ -371,31 +371,48 @@ def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots") -> Non
     sinner_trend = sinner_trend.sort_index()
     alcaraz_trend = alcaraz_trend.sort_index()
 
-    plt.figure(figsize=(12, 6))
+    fig, ax1 = plt.subplots(figsize=(12, 6))
     
-    if not sinner_trend.empty:
-        plt.plot(sinner_trend.index, sinner_trend.values, marker='o', linewidth=2.5, color='#023e8a', label='Jannik Sinner')
-    if not alcaraz_trend.empty:
-        plt.plot(alcaraz_trend.index, alcaraz_trend.values, marker='s', linewidth=2.5, color='#d90429', label='Carlos Alcaraz')
+    # 1. Plot Post Volume on a secondary Y-axis (ax2) in the background
+    ax2 = ax1.twinx()
+    
+    sinner_vol = df_sinner.groupby('date')['sentiment'].count() if not df_sinner.empty else pd.Series()
+    alcaraz_vol = df_alcaraz.groupby('date')['sentiment'].count() if not df_alcaraz.empty else pd.Series()
+    
+    sinner_vol = sinner_vol.sort_index()
+    alcaraz_vol = alcaraz_vol.sort_index()
+    
+    if not sinner_vol.empty:
+        ax2.fill_between(sinner_vol.index, sinner_vol.values, alpha=0.12, color='#00b4d8', label='Sinner Post Volume')
+    if not alcaraz_vol.empty:
+        ax2.fill_between(alcaraz_vol.index, alcaraz_vol.values, alpha=0.12, color='#ffb3c1', label='Alcaraz Post Volume')
+        
+    ax2.set_ylabel("Daily Post Volume (Shaded)", color='gray', fontsize=11, labelpad=10)
+    ax2.tick_params(axis='y', labelcolor='gray')
+    ax2.grid(False)  # Disable grid lines for secondary axis to avoid clutter
 
-    plt.axhline(0, color='gray', linestyle='--', linewidth=1, alpha=0.7)
+    # 2. Plot Average Sentiment Compound Scores on the primary Y-axis (ax1)
+    if not sinner_trend.empty:
+        ax1.plot(sinner_trend.index, sinner_trend.values, marker='o', linewidth=2.5, color='#023e8a', label='Jannik Sinner Sentiment')
+    if not alcaraz_trend.empty:
+        ax1.plot(alcaraz_trend.index, alcaraz_trend.values, marker='s', linewidth=2.5, color='#d90429', label='Carlos Alcaraz Sentiment')
+
+    ax1.axhline(0, color='gray', linestyle='--', linewidth=1, alpha=0.7)
     
     # Import and annotate US Open 2025 key match events from utils
     from utils import US_OPEN_EVENTS
     
-    # Force drawing of the elements so limits are updated, allowing us to query y-axis bounds
-    plt.gca().relim()
-    plt.gca().autoscale_view()
-    ymin, ymax = plt.gca().get_ylim()
-    
-    # We position the text 8% below the maximum y-axis value
+    # Force drawing/scaling so we can read the correct Y limits on the primary axis
+    ax1.relim()
+    ax1.autoscale_view()
+    ymin, ymax = ax1.get_ylim()
     text_y = ymax - (ymax - ymin) * 0.08
     
     for date_str, label, color in US_OPEN_EVENTS:
         try:
             event_date = pd.to_datetime(date_str).date()
-            plt.axvline(event_date, color=color, linestyle=':', alpha=0.5, linewidth=1.2)
-            plt.text(
+            ax1.axvline(event_date, color=color, linestyle=':', alpha=0.5, linewidth=1.2)
+            ax1.text(
                 event_date,
                 text_y,
                 f"  {label}",
@@ -410,13 +427,17 @@ def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots") -> Non
         except Exception as e:
             print(f"Warning: Could not annotate event {label} at {date_str}: {e}")
 
-    plt.title("Sentiment Trajectory Over Time (US Open 2025)\n(Daily Average RoBERTa Sentiment)", fontsize=14, pad=15, weight="bold")
-    plt.xlabel("Date", fontsize=11, labelpad=10)
-    plt.ylabel("Average Sentiment Compound Score", fontsize=11, labelpad=10)
-    plt.grid(True, linestyle=':', alpha=0.6)
-    plt.legend(fontsize=11)
+    plt.title("Sentiment Trajectory & Post Volume Over Time (US Open 2025)\n(Daily Avg RoBERTa Sentiment vs. Post Volume)", fontsize=14, pad=15, weight="bold")
+    ax1.set_xlabel("Date", fontsize=11, labelpad=10)
+    ax1.set_ylabel("Average Sentiment Compound Score (Lines)", fontsize=11, labelpad=10)
+    ax1.grid(True, linestyle=':', alpha=0.6)
     
-    plt.gcf().autofmt_xdate()
+    # Combine legends from both axes
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left', fontsize=10)
+    
+    fig.autofmt_xdate()
     plt.tight_layout()
     
     save_plot_copies("sentiment_over_time.png", output_dir=output_dir)
