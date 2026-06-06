@@ -220,6 +220,10 @@ def run_nlp_enrichment(df: pd.DataFrame, output_filepath: str = "data/sinner_alc
     return {"df": df, **scores}
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# PLOTS
+# ─────────────────────────────────────────────────────────────────────────────
+
 def plot_community_emotion_profiles(
     df: pd.DataFrame,
     Gu,
@@ -279,4 +283,141 @@ def plot_community_emotion_profiles(
 
     suffix_filename = title_suffix.replace(' ', '_').replace('(', '').replace(')', '')
     save_plot_copies(f"community_emotion_profiles{suffix_filename}.png", output_dir=output_dir)
+    plt.close()
+
+
+def plot_sentiment_distribution(df: pd.DataFrame, output_dir: str = "plots") -> None:
+    """Plot a donut chart showing the overall distribution of sentiment categories."""
+    if 'sentiment_category' not in df.columns:
+        print("Warning: 'sentiment_category' column not found in DataFrame. Skipping plot.")
+        return
+
+    counts = df['sentiment_category'].value_counts()
+    categories = counts.index.tolist()
+    sizes = counts.values.tolist()
+
+    # Color palette matching emerald green (pos), slate gray (neu), rose red (neg)
+    colors_map = {
+        'positive': '#2ec4b6',
+        'neutral': '#a0aec0',
+        'negative': '#e63946'
+    }
+    colors = [colors_map.get(cat, '#cbd5e0') for cat in categories]
+
+    plt.figure(figsize=(7, 7))
+    wedges, texts, autotexts = plt.pie(
+        sizes, 
+        labels=categories, 
+        autopct='%1.1f%%', 
+        startangle=140, 
+        colors=colors,
+        pctdistance=0.75,
+        textprops=dict(color="black", fontsize=12, weight="bold")
+    )
+    
+    # Add center circle to make it a donut
+    centre_circle = plt.Circle((0,0), 0.55, fc='white')
+    fig = plt.gcf()
+    fig.gca().add_artist(centre_circle)
+
+    # Style percentage text to be readable
+    for autotext in autotexts:
+        autotext.set_color('white')
+
+    plt.title("Overall Sentiment Distribution\n(RoBERTa Sentiment Classifier)", fontsize=14, pad=20, weight="bold")
+    plt.tight_layout()
+    save_plot_copies("sentiment_distribution.png", output_dir=output_dir)
+    plt.close()
+
+
+def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots") -> None:
+    """Plot daily average sentiment compound scores for Sinner vs. Alcaraz over time."""
+    if 'created_at' not in df.columns or 'sentiment_compound' not in df.columns or 'linked_entities' not in df.columns:
+        print("Warning: Required columns for sentiment over time not found. Skipping plot.")
+        return
+
+    df = df.copy()
+    df['date'] = pd.to_datetime(df['created_at'], format='mixed').dt.date
+
+    sinner_records = []
+    alcaraz_records = []
+
+    for _, row in df.iterrows():
+        linked_ents = row['linked_entities']
+        if isinstance(linked_ents, str):
+            import ast
+            try:
+                linked_ents = ast.literal_eval(linked_ents)
+            except Exception:
+                linked_ents = []
+        
+        uris = {ent['uri'] for ent in linked_ents if isinstance(ent, dict)}
+        text_lower = str(row['text']).lower()
+        
+        is_sinner = SINNER_URI in uris or any(k in text_lower for k in SINNER_KEYWORDS)
+        is_alcaraz = ALCARAZ_URI in uris or any(k in text_lower for k in ALCARAZ_KEYWORDS)
+
+        if is_sinner:
+            sinner_records.append({"date": row['date'], "sentiment": row['sentiment_compound']})
+        if is_alcaraz:
+            alcaraz_records.append({"date": row['date'], "sentiment": row['sentiment_compound']})
+
+    df_sinner = pd.DataFrame(sinner_records)
+    df_alcaraz = pd.DataFrame(alcaraz_records)
+
+    sinner_trend = df_sinner.groupby('date')['sentiment'].mean() if not df_sinner.empty else pd.Series()
+    alcaraz_trend = df_alcaraz.groupby('date')['sentiment'].mean() if not df_alcaraz.empty else pd.Series()
+
+    sinner_trend = sinner_trend.sort_index()
+    alcaraz_trend = alcaraz_trend.sort_index()
+
+    plt.figure(figsize=(12, 6))
+    
+    if not sinner_trend.empty:
+        plt.plot(sinner_trend.index, sinner_trend.values, marker='o', linewidth=2.5, color='#023e8a', label='Jannik Sinner')
+    if not alcaraz_trend.empty:
+        plt.plot(alcaraz_trend.index, alcaraz_trend.values, marker='s', linewidth=2.5, color='#d90429', label='Carlos Alcaraz')
+
+    plt.axhline(0, color='gray', linestyle='--', linewidth=1, alpha=0.7)
+    
+    # Import and annotate US Open 2025 key match events from utils
+    from utils import US_OPEN_EVENTS
+    
+    # Force drawing of the elements so limits are updated, allowing us to query y-axis bounds
+    plt.gca().relim()
+    plt.gca().autoscale_view()
+    ymin, ymax = plt.gca().get_ylim()
+    
+    # We position the text 8% below the maximum y-axis value
+    text_y = ymax - (ymax - ymin) * 0.08
+    
+    for date_str, label, color in US_OPEN_EVENTS:
+        try:
+            event_date = pd.to_datetime(date_str).date()
+            plt.axvline(event_date, color=color, linestyle=':', alpha=0.5, linewidth=1.2)
+            plt.text(
+                event_date,
+                text_y,
+                f"  {label}",
+                rotation=90,
+                verticalalignment='top',
+                horizontalalignment='left',
+                fontsize=9,
+                color=color,
+                weight='semibold',
+                alpha=0.8
+            )
+        except Exception as e:
+            print(f"Warning: Could not annotate event {label} at {date_str}: {e}")
+
+    plt.title("Sentiment Trajectory Over Time (US Open 2025)\n(Daily Average RoBERTa Sentiment)", fontsize=14, pad=15, weight="bold")
+    plt.xlabel("Date", fontsize=11, labelpad=10)
+    plt.ylabel("Average Sentiment Compound Score", fontsize=11, labelpad=10)
+    plt.grid(True, linestyle=':', alpha=0.6)
+    plt.legend(fontsize=11)
+    
+    plt.gcf().autofmt_xdate()
+    plt.tight_layout()
+    
+    save_plot_copies("sentiment_over_time.png", output_dir=output_dir)
     plt.close()

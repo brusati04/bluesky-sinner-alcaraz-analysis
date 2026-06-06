@@ -15,7 +15,9 @@ from social_network_analysis import (build_networks, calculate_centralities,
                                       run_community_detection, save_initial_centrality_csv,
                                       plot_network_graphs, plot_filtered_network_graph,
                                       get_filtered_networks)
-from social_sentiment_analysis import plot_community_emotion_profiles
+from social_sentiment_analysis import (plot_community_emotion_profiles,
+                                      plot_sentiment_distribution,
+                                      plot_sentiment_over_time)
 
 RAW_DATA_PATH = "data/sinner_alcaraz_posts.csv"
 PROCESSED_DATA_PATH = "data/sinner_alcaraz_processed.csv"
@@ -45,6 +47,11 @@ def main() -> None:
                                     title_suffix=" (Louvain - Filtered)")
     plot_community_emotion_profiles(df_processed, Gd_filtered, comm_data["node_to_infomap"],
                                     title_suffix=" (Infomap - Filtered)")
+
+    print("[NLP] Generating sentiment visualization plots...")
+    plot_sentiment_distribution(df_processed)
+    plot_sentiment_over_time(df_processed)
+    print("[NLP] Plots successfully generated and saved to plots/ and report/")
 
 
 if __name__ == "__main__":
