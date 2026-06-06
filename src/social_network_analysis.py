@@ -7,8 +7,22 @@ import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+import matplotlib.patches as mpatches
 
 from utils import save_plot_copies
+
+
+EMOTION_COLORS: dict[str, str] = {
+    "anger":        "#e74c3c",
+    "anticipation": "#e67e22",
+    "disgust":      "#795548",
+    "fear":         "#9b59b6",
+    "joy":          "#f1c40f",
+    "sadness":      "#3498db",
+    "surprise":     "#1abc9c",
+    "trust":        "#2ecc71",
+    "neutral":      "#95a5a6",
+}
 
 
 def build_networks(df: pd.DataFrame, did_to_handle: dict) -> tuple[nx.Graph, nx.DiGraph]:
@@ -369,6 +383,157 @@ def plot_filtered_network_graph(
         Gu_plot, Gd_plot, df_cent, comm_data, centralities,
         output_dir=output_dir, pos=pos, pos_dir=pos_dir,
         cmap_undirected=cmap_undirected, cmap_directed=cmap_directed,
+    )
+
+
+def _get_user_dominant_emotion(df_processed: pd.DataFrame, backend: str) -> dict[str, str]:
+    """Return a mapping of author_handle → dominant emotion (mode across all their posts).
+
+    Uses the nrc_dominant_emotion or bert_dominant_emotion column depending on backend.
+    Falls back to "neutral" for users with no data.
+    """
+    col = "nrc_dominant_emotion" if backend == "nrc" else "bert_dominant_emotion"
+    grouped = df_processed.groupby("author_handle")[col].agg(
+        lambda s: s.mode().iloc[0] if not s.mode().empty else "neutral"
+    )
+    return grouped.to_dict()
+
+
+def _add_emotion_legend(ax: plt.Axes) -> None:
+    """Attach a fixed colour legend for the 8 Plutchik emotions + neutral."""
+    patches = [
+        mpatches.Patch(color=color, label=emotion.capitalize())
+        for emotion, color in EMOTION_COLORS.items()
+    ]
+    ax.legend(
+        handles=patches,
+        loc="lower left",
+        fontsize=8,
+        title="Dominant Emotion",
+        title_fontsize=9,
+        framealpha=0.85,
+        ncol=2,
+    )
+
+
+def plot_network_graphs_by_emotion(
+    Gu: nx.Graph,
+    Gd: nx.DiGraph,
+    df_cent: pd.DataFrame,
+    centralities: dict,
+    df_processed: pd.DataFrame,
+    backend: str = "nrc",
+    output_dir: str = "plots",
+    pos: Optional[dict] = None,
+    pos_dir: Optional[dict] = None,
+) -> None:
+    """Render undirected and directed network graphs with nodes coloured by dominant emotion.
+
+    Node size still encodes degree centrality (undirected) and PageRank (directed).
+    Only the top-10 most central nodes are labelled.
+    Produces network_graph_emotion_{backend}.png and network_graph_directed_emotion_{backend}.png.
+    """
+    deg_cent = centralities["deg_cent"]
+    pagerank = centralities["pagerank"]
+    user_emotion = _get_user_dominant_emotion(df_processed, backend)
+    backend_label = backend.upper()
+
+    nodes_in_relations = [n for n, d in Gu.degree() if d > 0]
+    if not nodes_in_relations:
+        print("Isolated graph / Not enough relationships to plot.")
+        return
+
+    subG = Gu.subgraph(nodes_in_relations)
+    if pos is None:
+        pos = nx.spring_layout(subG, k=0.3, iterations=60, seed=42)
+
+    top_10_nodes = df_cent.sort_values(by="degree_centrality_undirected", ascending=False).head(10)['user'].tolist()
+    labels_to_draw = {node: node for node in subG.nodes() if node in top_10_nodes}
+
+    fig, ax = plt.subplots(figsize=(12, 12))
+    node_colors = [EMOTION_COLORS.get(user_emotion.get(node, "neutral"), EMOTION_COLORS["neutral"]) for node in subG.nodes()]
+    node_sizes = [50 + (deg_cent[node] * 1200) for node in subG.nodes()]
+
+    nx.draw_networkx_edges(subG, pos, ax=ax, alpha=0.15, edge_color="grey")
+    nx.draw_networkx_nodes(subG, pos, ax=ax, node_size=node_sizes, node_color=node_colors, alpha=0.9)
+    nx.draw_networkx_labels(subG, pos, ax=ax, labels=labels_to_draw, font_size=9, font_weight="bold", font_color="#1e272c")
+    ax.set_title(f"Undirected Social Network Graph — Dominant Emotion ({backend_label})\n(node size proportional to degree centrality)", pad=15)
+    ax.axis("off")
+    _add_emotion_legend(ax)
+    plt.tight_layout()
+    save_plot_copies(f"network_graph_emotion_{backend}.png", output_dir=output_dir)
+    plt.close(fig)
+
+    nodes_in_relations_dir = [n for n, d in Gd.degree() if d > 0]
+    fig2, ax2 = plt.subplots(figsize=(12, 12))
+    if nodes_in_relations_dir:
+        subG_dir = Gd.subgraph(nodes_in_relations_dir)
+        if pos_dir is None:
+            pos_dir = nx.spring_layout(subG_dir, k=0.3, iterations=60, seed=42)
+
+        node_colors_dir = [EMOTION_COLORS.get(user_emotion.get(node, "neutral"), EMOTION_COLORS["neutral"]) for node in subG_dir.nodes()]
+        node_sizes_dir = [50 + (pagerank.get(node, 0.0) * 18000) for node in subG_dir.nodes()]
+
+        nx.draw_networkx_edges(subG_dir, pos_dir, ax=ax2, alpha=0.2, edge_color="grey",
+                               arrows=True, arrowstyle='-|>', arrowsize=12,
+                               connectionstyle="arc3,rad=0.1")
+        nx.draw_networkx_nodes(subG_dir, pos_dir, ax=ax2, node_size=node_sizes_dir, node_color=node_colors_dir, alpha=0.9)
+
+        top_10_nodes_dir = df_cent.sort_values(by="pagerank", ascending=False).head(10)['user'].tolist()
+        labels_to_draw_dir = {node: node for node in subG_dir.nodes() if node in top_10_nodes_dir}
+        nx.draw_networkx_labels(subG_dir, pos_dir, ax=ax2, labels=labels_to_draw_dir, font_size=9, font_weight="bold", font_color="#1e272c")
+    else:
+        ax2.text(0.5, 0.5, "Isolated graph / Not enough relationships", ha='center', va='center')
+
+    ax2.set_title(f"Directed Social Network Graph — Dominant Emotion ({backend_label})\n(node size proportional to PageRank prestige)", pad=15)
+    ax2.axis("off")
+    _add_emotion_legend(ax2)
+    plt.tight_layout()
+    save_plot_copies(f"network_graph_directed_emotion_{backend}.png", output_dir=output_dir)
+    plt.close(fig2)
+
+
+def plot_filtered_network_graph_by_emotion(
+    Gu: nx.Graph,
+    Gd: nx.DiGraph,
+    df_cent: pd.DataFrame,
+    comm_data: dict,
+    centralities: dict,
+    df_processed: pd.DataFrame,
+    backend: str = "nrc",
+    min_component_size: int = 10,
+    output_dir: str = "plots/filtered",
+    top_k: int = 5,
+    sort_by: str = "post_volume",
+) -> None:
+    """Render emotion-coloured network graphs restricted to large components and top-k communities."""
+    Gu_plot = Gu.copy()
+    for component in list(nx.connected_components(Gu_plot)):
+        if len(component) <= min_component_size:
+            Gu_plot.remove_nodes_from(component)
+
+    Gd_plot = Gd.copy()
+    for component in list(nx.weakly_connected_components(Gd_plot)):
+        if len(component) <= min_component_size:
+            Gd_plot.remove_nodes_from(component)
+
+    node_to_louvain = comm_data["node_to_louvain"]
+    top_louvain = _select_top_communities(Gu_plot, node_to_louvain, df_processed, top_k, sort_by)
+    Gu_plot.remove_nodes_from([n for n in list(Gu_plot.nodes()) if node_to_louvain.get(n) not in top_louvain])
+
+    node_to_infomap = comm_data["node_to_infomap"]
+    top_infomap = _select_top_communities(Gd_plot, node_to_infomap, df_processed, top_k, sort_by)
+    Gd_plot.remove_nodes_from([n for n in list(Gd_plot.nodes()) if node_to_infomap.get(n) not in top_infomap])
+
+    nodes_with_edges = [n for n, d in Gu.degree() if d > 0]
+    pos = nx.spring_layout(Gu.subgraph(nodes_with_edges), k=0.3, iterations=60, seed=42)
+
+    nodes_with_edges_dir = [n for n, d in Gd.degree() if d > 0]
+    pos_dir = nx.spring_layout(Gd.subgraph(nodes_with_edges_dir), k=0.3, iterations=60, seed=42)
+
+    plot_network_graphs_by_emotion(
+        Gu_plot, Gd_plot, df_cent, centralities, df_processed,
+        backend=backend, output_dir=output_dir, pos=pos, pos_dir=pos_dir,
     )
 
 

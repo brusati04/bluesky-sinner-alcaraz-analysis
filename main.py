@@ -14,6 +14,8 @@ from preprocessing import prepare_dataset, plot_community_wordcloud
 from social_network_analysis import (build_networks, calculate_centralities,
                                       run_community_detection, save_initial_centrality_csv,
                                       plot_network_graphs, plot_filtered_network_graph,
+                                      plot_network_graphs_by_emotion,
+                                      plot_filtered_network_graph_by_emotion,
                                       get_filtered_networks)
 from social_sentiment_analysis import (plot_community_emotion_profiles,
                                       plot_sentiment_distribution,
@@ -43,6 +45,11 @@ def main() -> None:
 
     plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities)
     plot_filtered_network_graph(Gu, Gd, df_cent, comm_data, centralities, df_processed)
+
+    for backend in ("nrc", "bert"):
+        plot_network_graphs_by_emotion(Gu, Gd, df_cent, centralities, df_processed, backend=backend)
+        plot_filtered_network_graph_by_emotion(Gu, Gd, df_cent, comm_data, centralities,
+                                               df_processed, backend=backend)
 
     plot_community_emotion_profiles(df_processed, Gu_filtered, comm_data["node_to_louvain"],
                                     title_suffix=" (Louvain - Filtered)", backend="nrc")
