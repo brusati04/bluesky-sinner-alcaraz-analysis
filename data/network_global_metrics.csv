@@ -9,5 +9,5 @@ GCC Diameter,14.0
 GCC Radius,7.0
 GCC Min Eccentricity,7.0
 GCC Max Eccentricity,14.0
-Louvain Modularity,0.966642661179704
-Infomap Modularity,0.9521947873799803
+Louvain Modularity,0.9666426611796982
+Infomap Modularity,0.9437105624142661
