@@ -44,9 +44,13 @@ def main() -> None:
     plot_filtered_network_graph(Gu, Gd, df_cent, comm_data, centralities, df_processed)
 
     plot_community_emotion_profiles(df_processed, Gu_filtered, comm_data["node_to_louvain"],
-                                    title_suffix=" (Louvain - Filtered)")
+                                    title_suffix=" (Louvain - Filtered)", backend="nrc")
+    plot_community_emotion_profiles(df_processed, Gu_filtered, comm_data["node_to_louvain"],
+                                    title_suffix=" (Louvain - Filtered)", backend="bert")
     plot_community_emotion_profiles(df_processed, Gd_filtered, comm_data["node_to_infomap"],
-                                    title_suffix=" (Infomap - Filtered)")
+                                    title_suffix=" (Infomap - Filtered)", backend="nrc")
+    plot_community_emotion_profiles(df_processed, Gd_filtered, comm_data["node_to_infomap"],
+                                    title_suffix=" (Infomap - Filtered)", backend="bert")
 
     print("[NLP] Generating sentiment visualization plots...")
     plot_sentiment_distribution(df_processed)

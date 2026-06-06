@@ -370,7 +370,12 @@ def plot_community_emotion_profiles(
         filtered = {n: c for n, c in node_to_community.items() if n in Gu.nodes()}
         top_comms = [cid for cid, _ in Counter(filtered.values()).most_common(top_k)]
 
-    col_prefix = 'bert_emotion_' if backend == "bert" else 'emotion_'
+    if backend == "bert":
+        col_prefix = 'bert_emotion_'
+    else:
+        # Check if specific nrc columns are present to avoid mixups with BERT overwrites
+        col_prefix = 'nrc_emotion_' if 'nrc_emotion_fear' in df.columns else 'emotion_'
+
     emotion_cols = [f'{col_prefix}{e}' for e in NRC_EMOTIONS]
     records = []
     custom_palette = {}
@@ -399,8 +404,18 @@ def plot_community_emotion_profiles(
     plt.legend(title="Community")
     plt.tight_layout()
 
-    suffix_filename = title_suffix.replace(' ', '_').replace('(', '').replace(')', '')
-    save_plot_copies(f"community_emotion_profiles{suffix_filename}_{backend}.png", output_dir=output_dir)
+    # Clean the title_suffix to isolate the algorithm name (Louvain / Infomap)
+    if "Louvain" in title_suffix:
+        algo = "Louvain"
+    elif "Infomap" in title_suffix:
+        algo = "Infomap"
+    else:
+        algo = title_suffix.replace(' ', '_').replace('(', '').replace(')', '')
+        if algo.startswith("_"):
+            algo = algo[1:]
+
+    filename = f"community_emotion_{algo}_{backend}.png"
+    save_plot_copies(filename, output_dir=output_dir)
     plt.close()
 
 
