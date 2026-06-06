@@ -348,12 +348,15 @@ def plot_filtered_network_graph(
     sort_by: str = "post_volume",
     cmap_undirected: str = "tab20",
     cmap_directed: str = "tab20",
-) -> None:
+) -> tuple[nx.Graph, nx.DiGraph, dict, dict]:
     """Render network graphs restricted to large components and the top-k communities.
 
     Drops components of size <= min_component_size, keeps only the top-k Louvain
     (undirected) and Infomap (directed) communities, and reuses the full-graph spring
     layouts so node positions stay stable.
+
+    Returns the filtered (Gu_plot, Gd_plot) graphs together with the (pos, pos_dir)
+    layouts used, so the emotion-coloured variant can redraw the identical figure.
     """
     Gu_plot = Gu.copy()
     for component in list(nx.connected_components(Gu_plot)):
@@ -384,6 +387,8 @@ def plot_filtered_network_graph(
         output_dir=output_dir, pos=pos, pos_dir=pos_dir,
         cmap_undirected=cmap_undirected, cmap_directed=cmap_directed,
     )
+
+    return Gu_plot, Gd_plot, pos, pos_dir
 
 
 def _get_user_dominant_emotion(df_processed: pd.DataFrame, backend: str) -> dict[str, str]:
@@ -428,6 +433,13 @@ def plot_network_graphs_by_emotion(
     pos_dir: Optional[dict] = None,
 ) -> None:
     """Render undirected and directed network graphs with nodes coloured by dominant emotion.
+
+    This is meant to redraw the *same* graphs produced by plot_network_graphs /
+    plot_filtered_network_graph: pass the identical (Gu, Gd) graph objects and the
+    (pos, pos_dir) layouts those functions returned, and the only difference from the
+    community-coloured figures is the node colour (dominant emotion instead of
+    community). When pos/pos_dir are omitted they fall back to the same spring layout
+    (k=0.3, iterations=60, seed=42) for standalone use.
 
     Node size still encodes degree centrality (undirected) and PageRank (directed).
     Only the top-10 most central nodes are labelled.
@@ -493,50 +505,6 @@ def plot_network_graphs_by_emotion(
     plt.close(fig2)
 
 
-def plot_filtered_network_graph_by_emotion(
-    Gu: nx.Graph,
-    Gd: nx.DiGraph,
-    df_cent: pd.DataFrame,
-    comm_data: dict,
-    centralities: dict,
-    df_processed: pd.DataFrame,
-    backend: str = "nrc",
-    min_component_size: int = 10,
-    output_dir: str = "plots/filtered",
-    top_k: int = 5,
-    sort_by: str = "post_volume",
-) -> None:
-    """Render emotion-coloured network graphs restricted to large components and top-k communities."""
-    Gu_plot = Gu.copy()
-    for component in list(nx.connected_components(Gu_plot)):
-        if len(component) <= min_component_size:
-            Gu_plot.remove_nodes_from(component)
-
-    Gd_plot = Gd.copy()
-    for component in list(nx.weakly_connected_components(Gd_plot)):
-        if len(component) <= min_component_size:
-            Gd_plot.remove_nodes_from(component)
-
-    node_to_louvain = comm_data["node_to_louvain"]
-    top_louvain = _select_top_communities(Gu_plot, node_to_louvain, df_processed, top_k, sort_by)
-    Gu_plot.remove_nodes_from([n for n in list(Gu_plot.nodes()) if node_to_louvain.get(n) not in top_louvain])
-
-    node_to_infomap = comm_data["node_to_infomap"]
-    top_infomap = _select_top_communities(Gd_plot, node_to_infomap, df_processed, top_k, sort_by)
-    Gd_plot.remove_nodes_from([n for n in list(Gd_plot.nodes()) if node_to_infomap.get(n) not in top_infomap])
-
-    nodes_with_edges = [n for n, d in Gu.degree() if d > 0]
-    pos = nx.spring_layout(Gu.subgraph(nodes_with_edges), k=0.3, iterations=60, seed=42)
-
-    nodes_with_edges_dir = [n for n, d in Gd.degree() if d > 0]
-    pos_dir = nx.spring_layout(Gd.subgraph(nodes_with_edges_dir), k=0.3, iterations=60, seed=42)
-
-    plot_network_graphs_by_emotion(
-        Gu_plot, Gd_plot, df_cent, centralities, df_processed,
-        backend=backend, output_dir=output_dir, pos=pos, pos_dir=pos_dir,
-    )
-
-
 def plot_network_graphs(
     Gu: nx.Graph,
     Gd: nx.DiGraph,
@@ -548,11 +516,14 @@ def plot_network_graphs(
     pos_dir: Optional[dict] = None,
     cmap_undirected: str = "tab20",
     cmap_directed: str = "tab20",
-) -> None:
+) -> tuple[Optional[dict], Optional[dict]]:
     """Render the undirected (Louvain/degree) and directed (Infomap/PageRank) network figures.
 
     Node colour encodes community, node size encodes centrality, and only the top-10
     most central nodes are labelled. Precomputed layouts (pos/pos_dir) are reused as-is.
+
+    Returns the (pos, pos_dir) spring layouts actually used so callers (e.g. the
+    emotion-coloured variant) can redraw the *identical* graph with different colours.
     """
     deg_cent = centralities["deg_cent"]
     pagerank = centralities["pagerank"]
@@ -562,7 +533,7 @@ def plot_network_graphs(
     nodes_in_relations = [n for n, d in Gu.degree() if d > 0]
     if not nodes_in_relations:
         print("Isolated graph / Not enough relationships to plot.")
-        return
+        return pos, pos_dir
 
     subG = Gu.subgraph(nodes_in_relations)
     if pos is None:
@@ -614,3 +585,5 @@ def plot_network_graphs(
     plt.tight_layout()
     save_plot_copies("network_graph_directed.png", output_dir=output_dir)
     plt.close()
+
+    return pos, pos_dir

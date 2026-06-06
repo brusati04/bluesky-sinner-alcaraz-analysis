@@ -15,7 +15,6 @@ from social_network_analysis import (build_networks, calculate_centralities,
                                       run_community_detection, save_initial_centrality_csv,
                                       plot_network_graphs, plot_filtered_network_graph,
                                       plot_network_graphs_by_emotion,
-                                      plot_filtered_network_graph_by_emotion,
                                       get_filtered_networks)
 from social_sentiment_analysis import (plot_community_emotion_profiles,
                                       plot_sentiment_distribution,
@@ -43,13 +42,19 @@ def main() -> None:
 
     Gu_filtered, Gd_filtered = get_filtered_networks(Gu, Gd)
 
-    plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities)
-    plot_filtered_network_graph(Gu, Gd, df_cent, comm_data, centralities, df_processed)
+    # Render the community-coloured graphs and capture the exact layouts (and the
+    # filtered subgraphs) they used, so the emotion-coloured variants below are the
+    # *identical* graphs, recoloured by dominant emotion rather than recomputed.
+    pos, pos_dir = plot_network_graphs(Gu, Gd, df_cent, comm_data, centralities)
+    Gu_plot, Gd_plot, pos_f, pos_dir_f = plot_filtered_network_graph(
+        Gu, Gd, df_cent, comm_data, centralities, df_processed)
 
     for backend in ("nrc", "bert"):
-        plot_network_graphs_by_emotion(Gu, Gd, df_cent, centralities, df_processed, backend=backend)
-        plot_filtered_network_graph_by_emotion(Gu, Gd, df_cent, comm_data, centralities,
-                                               df_processed, backend=backend)
+        plot_network_graphs_by_emotion(Gu, Gd, df_cent, centralities, df_processed,
+                                       backend=backend, pos=pos, pos_dir=pos_dir)
+        plot_network_graphs_by_emotion(Gu_plot, Gd_plot, df_cent, centralities, df_processed,
+                                       backend=backend, output_dir="plots/filtered",
+                                       pos=pos_f, pos_dir=pos_dir_f)
 
     plot_community_emotion_profiles(df_processed, Gu_filtered, comm_data["node_to_louvain"],
                                     title_suffix=" (Louvain - Filtered)", backend="nrc")
