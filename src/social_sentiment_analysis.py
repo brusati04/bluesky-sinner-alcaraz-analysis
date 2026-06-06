@@ -46,11 +46,7 @@ def _prepare_community_emotion_data(
         filtered = {n: c for n, c in node_to_community.items() if n in Gu.nodes()}
         top_comms = [cid for cid, _ in Counter(filtered.values()).most_common(top_k)]
 
-    if backend == "bert":
-        col_prefix = 'bert_emotion_'
-    else:
-        # Check if specific nrc columns are present to avoid mixups with BERT overwrites
-        col_prefix = 'nrc_emotion_' if 'nrc_emotion_fear' in df.columns else 'emotion_'
+    col_prefix = 'bert_emotion_' if backend == "bert" else 'nrc_emotion_'
 
     emotion_cols = [f'{col_prefix}{e}' for e in NRC_EMOTIONS]
     records = []

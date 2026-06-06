@@ -229,17 +229,22 @@ def score_emotions(text: str) -> dict[str, float]:
 
 
 def add_emotion_columns(df: pd.DataFrame, text_col: str = 'cleaned_text', backend: str = "nrc") -> pd.DataFrame:
-    """Add the 8 emotion columns plus a 'dominant_emotion' column to a DataFrame.
+    """Add the 8 backend-prefixed emotion columns plus a ``{backend}_dominant_emotion``
+    column to a DataFrame.
 
-    The ``backend`` selects the scoring engine:
-      - "nrc"  : per-post NRCLex affect frequencies (the original behaviour).
+    The ``backend`` selects both the scoring engine and the output column family:
+      - "nrc"  : per-post NRCLex affect frequencies
+                 -> ``nrc_emotion_*`` / ``nrc_dominant_emotion``.
       - "bert" : batched GoEmotions (RoBERTa) inference, with the 28 fine-grained
-                 labels collapsed onto the 8 NRC categories via GOEMOTIONS_TO_NRC.
+                 labels collapsed onto the 8 NRC categories via GOEMOTIONS_TO_NRC
+                 -> ``bert_emotion_*`` / ``bert_dominant_emotion``.
 
-    Either way the output columns (`emotion_*`, `dominant_emotion`) and the neutral
-    fallback (sum of scores == 0 → 'neutral') are identical. Posts with no detected
-    emotion are labelled 'neutral'.
+    Each backend writes only its own prefixed columns (no generic ``emotion_*`` /
+    ``dominant_emotion``), so running both backends never clashes. Posts with no
+    detected emotion are labelled 'neutral'.
     """
+    prefix = f"{backend}_emotion_"
+    dom_col = f"{backend}_dominant_emotion"
     if backend == "bert":
         clf = _get_emotion_clf_bert()
         batch_size = 128
@@ -280,22 +285,22 @@ def add_emotion_columns(df: pd.DataFrame, text_col: str = 'cleaned_text', backen
     else:
         emotion_df = pd.DataFrame(df[text_col].apply(score_emotions).tolist(), index=df.index)
 
-    emotion_df.columns = [f'emotion_{e}' for e in NRC_EMOTIONS]
-    # Drop any generic emotion columns from a previous backend pass so a second
-    # call (e.g. running both backends) overwrites rather than duplicates them.
+    emotion_df.columns = [f'{prefix}{e}' for e in NRC_EMOTIONS]
+    # Drop any prior columns for THIS backend so a re-run overwrites rather than
+    # duplicates them (each backend owns its own prefixed column family).
     stale_cols = [c for c in emotion_df.columns if c in df.columns]
-    if 'dominant_emotion' in df.columns:
-        stale_cols.append('dominant_emotion')
+    if dom_col in df.columns:
+        stale_cols.append(dom_col)
     if stale_cols:
         df = df.drop(columns=stale_cols)
     df = pd.concat([df, emotion_df], axis=1)
 
     if backend == "bert":
-        df['dominant_emotion'] = dominant_emotions
+        df[dom_col] = dominant_emotions
     else:
         emotion_cols = list(emotion_df.columns)
-        df['dominant_emotion'] = df[emotion_cols].idxmax(axis=1).str.replace('emotion_', '')
-        df.loc[df[emotion_cols].sum(axis=1) == 0, 'dominant_emotion'] = 'neutral'
+        df[dom_col] = df[emotion_cols].idxmax(axis=1).str.replace(prefix, '', regex=False)
+        df.loc[df[emotion_cols].sum(axis=1) == 0, dom_col] = 'neutral'
     return df
 
 
@@ -313,15 +318,11 @@ def run_nlp_enrichment(df: pd.DataFrame, output_filepath: str = "data/sinner_alc
     per-player sentiment score buckets.
 
     The ``emotion_backend`` parameter selects the emotion-scoring engine(s):
-      - "nrc"  : NRCLex affect frequencies only.
-      - "bert" : GoEmotions (RoBERTa) only; also aliased to `bert_emotion_*` /
-                 `bert_dominant_emotion` columns.
-      - "both" : (default) run both backends. The generic `emotion_*` /
-                 `dominant_emotion` columns hold the most recently computed
-                 (BERT) backend, and both are additionally preserved under the
-                 `nrc_emotion_*` / `nrc_dominant_emotion` and `bert_emotion_*` /
-                 `bert_dominant_emotion` column families for side-by-side
-                 comparison.
+      - "nrc"  : NRCLex affect frequencies only -> `nrc_emotion_*` / `nrc_dominant_emotion`.
+      - "bert" : GoEmotions (RoBERTa) only -> `bert_emotion_*` / `bert_dominant_emotion`.
+      - "both" : (default) run both backends, producing the `nrc_emotion_*` /
+                 `nrc_dominant_emotion` and `bert_emotion_*` / `bert_dominant_emotion`
+                 column families for side-by-side comparison.
     """
     df = df.copy()
     total_posts = len(df)
@@ -346,23 +347,14 @@ def run_nlp_enrichment(df: pd.DataFrame, output_filepath: str = "data/sinner_alc
     elif emotion_backend == "bert":
         print("[NLP] Step 3/6: Running GoEmotions BERT emotion analysis...")
         df = add_emotion_columns(df, text_col='cleaned_text', backend='bert')
-        for e in NRC_EMOTIONS:
-            df[f'bert_emotion_{e}'] = df[f'emotion_{e}']
-        df['bert_dominant_emotion'] = df['dominant_emotion']
         print("[NLP] Step 3/6 completed.")
     else:
         print("[NLP] Step 3/6: Running NRC Emotion Lexicon analysis...")
         df = add_emotion_columns(df, text_col='cleaned_text', backend='nrc')
-        for e in NRC_EMOTIONS:
-            df[f'nrc_emotion_{e}'] = df[f'emotion_{e}']
-        df['nrc_dominant_emotion'] = df['dominant_emotion']
         print("[NLP] Step 3/6 completed.")
 
         print("[NLP] Step 4/6: Running GoEmotions BERT emotion analysis...")
         df = add_emotion_columns(df, text_col='cleaned_text', backend='bert')
-        for e in NRC_EMOTIONS:
-            df[f'bert_emotion_{e}'] = df[f'emotion_{e}']
-        df['bert_dominant_emotion'] = df['dominant_emotion']
         print("[NLP] Step 4/6 completed.")
 
     print("[NLP] Step 5/6: Extracting Named Entities (spaCy NER)...")

@@ -22,7 +22,6 @@ random.seed(42)
 np.random.seed(42)
 
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
-sys.path.append(os.path.join(os.path.dirname(__file__), 'web'))
 
 from preprocessing import prepare_dataset, plot_community_wordcloud
 from social_network_analysis import (build_networks, calculate_centralities,
