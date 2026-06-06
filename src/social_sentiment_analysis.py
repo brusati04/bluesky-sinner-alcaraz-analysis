@@ -1,14 +1,21 @@
 import os
 from typing import Optional
 
+# Set custom Hugging Face cache directory to avoid permissions/lock issues in user home directory
+workspace_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.environ["HF_HOME"] = os.path.abspath(os.path.join(workspace_path, ".huggingface_cache"))
+
 import pandas as pd
+import numpy as np
+import torch
 import matplotlib.pyplot as plt
 import seaborn as sns
+from tqdm import tqdm
 from nrclex import NRCLex
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from transformers import pipeline
 
 from utils import save_plot_copies
-from preprocessing import clean_text, preprocess
+from preprocessing import clean_text, clean_text_bert, preprocess
 from social_network_analysis import get_community_color_map
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -35,26 +42,9 @@ ALCARAZ_URI = "http://dbpedia.org/resource/Carlos_Alcaraz"
 SINNER_KEYWORDS = {"sinner", "jannik"}
 ALCARAZ_KEYWORDS = {"alcaraz", "carlos", "carlitos"}
 
-analyzer = SentimentIntensityAnalyzer()
-
 # ─────────────────────────────────────────────────────────────────────────────
 # NLP, ENTITY MATCHING & EMOTION SCORING
 # ─────────────────────────────────────────────────────────────────────────────
-
-
-def get_vader_sentiment(text: Optional[str]) -> tuple[str, float]:
-    """Score text with VADER, returning a (category, compound) pair.
-
-    Category is positive/negative/neutral using the standard +/-0.05 thresholds.
-    """
-    if pd.isna(text) or text == "":
-        return "neutral", 0.0
-    comp = analyzer.polarity_scores(text)['compound']
-    if comp >= 0.05:
-        return "positive", comp
-    if comp <= -0.05:
-        return "negative", comp
-    return "neutral", comp
 
 
 def extract_ner(text: Optional[str]) -> list[tuple[str, str]]:
@@ -119,13 +109,10 @@ def add_emotion_columns(df: pd.DataFrame, text_col: str = 'cleaned_text') -> pd.
 
 
 def derive_player_sentiment_scores(df: pd.DataFrame) -> dict[str, list[float]]:
-    """Bucket VADER compound scores per player (Sinner / Alcaraz).
+    """Bucket compound scores per player (Sinner / Alcaraz).
 
     A post counts toward a player when that player's DBpedia entity was linked
     or their name keywords appear in the raw post text.
-
-    NOTE: these buckets are produced for downstream stance analysis but are not
-    consumed by the current pipeline.
     """
     sinner_scores: list[float] = []
     alcaraz_scores: list[float] = []
@@ -140,32 +127,91 @@ def derive_player_sentiment_scores(df: pd.DataFrame) -> dict[str, list[float]]:
 
 
 def run_nlp_enrichment(df: pd.DataFrame, output_filepath: str = "data/sinner_alcaraz_processed.csv") -> dict:
-    """Enrich crawled posts with cleaned text, VADER sentiment, NRC emotions, NER and entity links.
+    """Enrich crawled posts with cleaned text, RoBERTa sentiment, NRC emotions, NER and entity links.
 
     Writes the enriched DataFrame to output_filepath and returns it together with
     per-player sentiment score buckets.
     """
     df = df.copy()
     total_posts = len(df)
-    print(f"[NLP] Starting NLP enrichment for {total_posts} posts...")
+    print(f"[NLP] Starting BERT/RoBERTa NLP enrichment for {total_posts} posts...")
 
     print("[NLP] Step 1/5: Cleaning and preprocessing post text...")
     df['cleaned_text'] = df['text'].apply(clean_text)
     df['preprocessed_text'] = df['text'].apply(preprocess)
+    print("[NLP] Step 1/5 completed.")
 
-    print("[NLP] Step 2/5: Scoring VADER sentiments...")
-    sentiments = df['cleaned_text'].apply(get_vader_sentiment)
-    df['sentiment_category'] = [s[0] for s in sentiments]
-    df['sentiment_compound'] = [s[1] for s in sentiments]
+    print("[NLP] Step 2/5: Scoring RoBERTa sentiments on GPU...")
+    # Initialize pipeline
+    device = 0 if torch.cuda.is_available() else -1
+    print(f"[NLP] Initializing CardiffNLP RoBERTa model on device={device}...")
+    classifier = pipeline(
+        "sentiment-analysis",
+        model="cardiffnlp/twitter-roberta-base-sentiment-latest",
+        device=device,
+        top_k=None
+    )
+
+    # Clean the text with clean_text_bert ONLY for BERT/RoBERTa input
+    bert_inputs = df['text'].apply(clean_text_bert).tolist()
+    batch_size = 128
+    sentiment_categories = []
+    sentiment_compounds = []
+
+    print(f"[NLP] Running GPU parallelized inference with batch_size={batch_size}...")
+    
+    # Generator to pass to pipeline for parallelized dataloading and batching on GPU
+    def input_generator():
+        for t in bert_inputs:
+            yield t if (isinstance(t, str) and t.strip() != "") else " "
+
+    # Running classifier with generator yields results dynamically, which is parallelized under the hood
+    results = classifier(input_generator(), batch_size=batch_size, truncation=True, max_length=512)
+
+    for res in tqdm(results, total=len(bert_inputs), desc="RoBERTa Sentiment"):
+        scores_dict = {d['label']: d['score'] for d in res}
+        
+        # Label mappings (handles standard string labels or LABEL_X identifiers)
+        if 'LABEL_0' in scores_dict:
+            p_neg = scores_dict.get('LABEL_0', 0.0)
+            p_neu = scores_dict.get('LABEL_1', 0.0)
+            p_pos = scores_dict.get('LABEL_2', 0.0)
+            
+            max_label = max(scores_dict, key=scores_dict.get)
+            if max_label == 'LABEL_0':
+                cat = 'negative'
+            elif max_label == 'LABEL_2':
+                cat = 'positive'
+            else:
+                cat = 'neutral'
+        else:
+            p_neg = scores_dict.get('negative', 0.0)
+            p_neu = scores_dict.get('neutral', 0.0)
+            p_pos = scores_dict.get('positive', 0.0)
+            
+            cat = max(scores_dict, key=scores_dict.get)
+            
+        # Compound score = P(positive) - P(negative)
+        comp = p_pos - p_neg
+        
+        sentiment_categories.append(cat)
+        sentiment_compounds.append(comp)
+
+    df['sentiment_category'] = sentiment_categories
+    df['sentiment_compound'] = sentiment_compounds
+    print("[NLP] Step 2/5 completed.")
 
     print("[NLP] Step 3/5: Running NRC Emotion Lexicon analysis...")
     df = add_emotion_columns(df, text_col='cleaned_text')
+    print("[NLP] Step 3/5 completed.")
 
     print("[NLP] Step 4/5: Extracting Named Entities (spaCy NER)...")
     df['entities'] = df['cleaned_text'].apply(extract_ner)
+    print("[NLP] Step 4/5 completed.")
 
     print("[NLP] Step 5/5: Linking entities to DBpedia resources...")
     df['linked_entities'] = df['cleaned_text'].apply(link_entities_dbpedia)
+    print("[NLP] Step 5/5 completed.")
 
     scores = derive_player_sentiment_scores(df)
 

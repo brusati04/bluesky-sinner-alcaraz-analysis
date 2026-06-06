@@ -42,6 +42,19 @@ def clean_text(text: Optional[str]) -> str:
     return re.sub(r'\s+', ' ', text).strip()
 
 
+def clean_text_bert(text: Optional[str]) -> str:
+    """Light normalisation for BERT/RoBERTa: unescape HTML, replace handles with @user, replace URLs with http, preserve punctuation and casing."""
+    if pd.isna(text):
+        return ""
+    text = html.unescape(text)
+    # Replace links with 'http' (standard for CardiffNLP twitter-roberta-base-sentiment)
+    text = re.sub(r'http\S+|www\.\S+', 'http', text)
+    # Replace handles with '@user' (standard for CardiffNLP twitter-roberta-base-sentiment)
+    text = re.sub(r'@\w+', '@user', text)
+    return re.sub(r'\s+', ' ', text).strip()
+
+
+
 def preprocess(text: Optional[str]) -> str:
     """Clean, tokenise and lemmatise post text into a space-joined string of meaningful tokens.
 
