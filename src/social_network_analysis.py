@@ -360,10 +360,10 @@ def plot_filtered_network_graph(
     Gd_plot.remove_nodes_from([n for n in list(Gd_plot.nodes()) if node_to_infomap.get(n) not in top_infomap])
 
     nodes_with_edges = [n for n, d in Gu.degree() if d > 0]
-    pos = nx.spring_layout(Gu.subgraph(nodes_with_edges), k=0.15, iterations=40, seed=42)
+    pos = nx.spring_layout(Gu.subgraph(nodes_with_edges), k=0.3, iterations=60, seed=42)
 
     nodes_with_edges_dir = [n for n, d in Gd.degree() if d > 0]
-    pos_dir = nx.spring_layout(Gd.subgraph(nodes_with_edges_dir), k=0.15, iterations=40, seed=42)
+    pos_dir = nx.spring_layout(Gd.subgraph(nodes_with_edges_dir), k=0.3, iterations=60, seed=42)
 
     plot_network_graphs(
         Gu_plot, Gd_plot, df_cent, comm_data, centralities,
@@ -401,7 +401,8 @@ def plot_network_graphs(
 
     subG = Gu.subgraph(nodes_in_relations)
     if pos is None:
-        pos = nx.spring_layout(subG, k=0.15, iterations=40, seed=42)
+        pos = nx.spring_layout(subG, k=0.3, iterations=60, seed=42)
+        
     top_10_nodes = df_cent.sort_values(by="degree_centrality_undirected", ascending=False).head(10)['user'].tolist()
     labels_to_draw = {node: node for node in subG.nodes() if node in top_10_nodes}
 
@@ -425,7 +426,7 @@ def plot_network_graphs(
     if nodes_in_relations_dir:
         subG_dir = Gd.subgraph(nodes_in_relations_dir)
         if pos_dir is None:
-            pos_dir = nx.spring_layout(subG_dir, k=0.15, iterations=40, seed=42)
+            pos_dir = nx.spring_layout(subG_dir, k=0.3, iterations=60, seed=42)
 
         node_to_infomap = comm_data.get("node_to_infomap", {})
         infomap_color_map = get_community_color_map(node_to_infomap, cmap_name=cmap_directed)
