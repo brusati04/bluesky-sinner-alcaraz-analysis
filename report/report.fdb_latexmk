@@ -1,5 +1,5 @@
 # Fdb version 4
-["pdflatex"] 1780738736.60729 "c:/Users/loryb/Desktop/Project/bluesky-sinner-alcaraz-analysis/report/report.tex" "report.pdf" "report" 1780738739.94994 0
+["pdflatex"] 1780739999.43599 "c:/Users/loryb/Desktop/Project/bluesky-sinner-alcaraz-analysis/report/report.tex" "report.pdf" "report" 1780740002.82701 0
   "C:/Users/loryb/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map" 1780340493 220889 b633cf45c7eed4eadae3f50154bdaacb ""
   "C:/Users/loryb/AppData/Local/MiKTeX/fonts/pk/ljfour/jknappen/ec/dpi600/tcrm1095.pk" 1780340502 12668 0bdc8aa0f3597280ea6cd4fc97228f44 ""
   "C:/Users/loryb/AppData/Local/MiKTeX/miktex/data/le/pdftex/pdflatex.fmt" 1779447998 13333487 e45766d5306cbf93eb3bb7af9e1bb766 ""
@@ -96,15 +96,15 @@
   "C:/Users/loryb/AppData/Local/Programs/MiKTeX/tex/latex/rerunfilecheck/rerunfilecheck.sty" 1751104012 9684 a33a14b82ce60d6e77cb9be689d79ee6 ""
   "C:/Users/loryb/AppData/Local/Programs/MiKTeX/tex/latex/url/url.sty" 1388490452 12796 8edb7d69a20b857904dd0ea757c14ec9 ""
   "c:/Users/loryb/Desktop/Project/bluesky-sinner-alcaraz-analysis/report/report.tex" 1780738566 17315 2bec2ebf223990d4aa00e3ac4a4107ed ""
-  "community_emotion_profiles_Infomap_-_Filtered.png" 1780738547 170762 4c1620955c7d78ff804cd427a699d364 ""
-  "community_emotion_profiles_Louvain_-_Filtered.png" 1780738547 171964 a100a7dfa5225c1ccb6b7294813fe3c2 ""
-  "community_wordcloud.png" 1780738549 1361010 3788b713fb6dffa5d8bf83724482f167 ""
-  "filtered/network_graph.png" 1780738739 392338 77a9f6ecf75371ff34fcee7f9153d6ae ""
-  "filtered/network_graph_directed.png" 1780738739 312351 6dae70cd7f3d4602d545717bde2fd3b0 ""
-  "network_graph.png" 1780738734 1206990 00e9794f497935c3023162ac803871f1 ""
-  "network_graph_directed.png" 1780738737 1474788 bd28adbbfed89239f6ed07cc92aa44ef ""
-  "report.aux" 1780738739 6212 becf651fe42e249faaa9eee1bb9904a1 "pdflatex"
-  "report.out" 1780738739 2937 1f1dfa7aaa0f1f3319bcb7082b8e7291 "pdflatex"
+  "community_emotion_profiles_Infomap_-_Filtered.png" 1780738776 170762 4c1620955c7d78ff804cd427a699d364 ""
+  "community_emotion_profiles_Louvain_-_Filtered.png" 1780738776 171964 a100a7dfa5225c1ccb6b7294813fe3c2 ""
+  "community_wordcloud.png" 1780739999 1667429 4081b598ebf7017cdcc4bb11ffd6421a ""
+  "filtered/network_graph.png" 1780739996 392338 77a9f6ecf75371ff34fcee7f9153d6ae ""
+  "filtered/network_graph_directed.png" 1780739996 312351 6dae70cd7f3d4602d545717bde2fd3b0 ""
+  "network_graph.png" 1780739991 1206990 00e9794f497935c3023162ac803871f1 ""
+  "network_graph_directed.png" 1780739994 1474788 bd28adbbfed89239f6ed07cc92aa44ef ""
+  "report.aux" 1780740002 6212 becf651fe42e249faaa9eee1bb9904a1 "pdflatex"
+  "report.out" 1780740002 2937 1f1dfa7aaa0f1f3319bcb7082b8e7291 "pdflatex"
   "report.tex" 1780738566 17315 2bec2ebf223990d4aa00e3ac4a4107ed ""
   (generated)
   "report.aux"
