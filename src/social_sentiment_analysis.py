@@ -28,6 +28,19 @@ NRC_EMOTIONS = [
     'surprise', 'sadness', 'disgust', 'joy'
 ]
 
+# Mapping from GoEmotions (28 fine-grained labels) to the 8 NRC/Plutchik
+# categories, so the BERT backend produces scores comparable to NRCLex.
+GOEMOTIONS_TO_NRC = {
+    "joy":          ["joy", "amusement", "excitement", "love", "pride", "relief"],
+    "trust":        ["admiration", "approval", "gratitude", "caring"],
+    "anticipation": ["curiosity", "desire", "optimism"],
+    "surprise":     ["surprise", "realization", "confusion"],
+    "fear":         ["fear", "nervousness"],
+    "anger":        ["anger", "annoyance", "disapproval"],
+    "disgust":      ["disgust"],
+    "sadness":      ["sadness", "disappointment", "grief", "remorse", "embarrassment"],
+}
+
 # NOTE: the stance-weight and polarity groupings below are scaffolding for a
 # multi-signal stance score that the current pipeline does not yet compute.
 POSITIVE_EMOTIONS = ["emotion_joy", "emotion_trust", "emotion_anticipation"]
@@ -45,6 +58,25 @@ ALCARAZ_KEYWORDS = {"alcaraz", "carlos", "carlitos"}
 # ─────────────────────────────────────────────────────────────────────────────
 # NLP, ENTITY MATCHING & EMOTION SCORING
 # ─────────────────────────────────────────────────────────────────────────────
+
+# Lazily-initialised GoEmotions (RoBERTa) classifier for the BERT emotion backend.
+_emotion_clf_bert = None
+
+
+def _get_emotion_clf_bert():
+    global _emotion_clf_bert
+    if _emotion_clf_bert is None:
+        device = 0 if torch.cuda.is_available() else -1
+        print(f"[NLP] Initializing GoEmotions BERT model on device={device}...")
+        _emotion_clf_bert = pipeline(
+            "text-classification",
+            model="SamLowe/roberta-base-go_emotions",
+            top_k=None,
+            truncation=True,
+            max_length=128,
+            device=device,
+        )
+    return _emotion_clf_bert
 
 
 def extract_ner(text: Optional[str]) -> list[tuple[str, str]]:
@@ -93,13 +125,57 @@ def score_emotions(text: str) -> dict[str, float]:
         return {e: 0.0 for e in NRC_EMOTIONS}
 
 
-def add_emotion_columns(df: pd.DataFrame, text_col: str = 'cleaned_text') -> pd.DataFrame:
-    """Add the 8 NRC emotion columns plus a 'dominant_emotion' column to a DataFrame.
+def add_emotion_columns(df: pd.DataFrame, text_col: str = 'cleaned_text', backend: str = "nrc") -> pd.DataFrame:
+    """Add the 8 emotion columns plus a 'dominant_emotion' column to a DataFrame.
 
-    Posts with no detected emotion are labelled 'neutral'.
+    The ``backend`` selects the scoring engine:
+      - "nrc"  : per-post NRCLex affect frequencies (the original behaviour).
+      - "bert" : batched GoEmotions (RoBERTa) inference, with the 28 fine-grained
+                 labels collapsed onto the 8 NRC categories via GOEMOTIONS_TO_NRC.
+
+    Either way the output columns (`emotion_*`, `dominant_emotion`) and the neutral
+    fallback (sum of scores == 0 → 'neutral') are identical. Posts with no detected
+    emotion are labelled 'neutral'.
     """
-    emotion_df = pd.DataFrame(df[text_col].apply(score_emotions).tolist(), index=df.index)
+    if backend == "bert":
+        clf = _get_emotion_clf_bert()
+        batch_size = 128
+        emotion_inputs = df[text_col].tolist()
+
+        # Generator to pass to pipeline for parallelized dataloading and batching on GPU
+        def emotion_generator():
+            for t in emotion_inputs:
+                yield t if (isinstance(t, str) and t.strip() != "") else " "
+
+        print(f"[NLP] Running GPU parallelized inference with batch_size={batch_size}...")
+        raw_results = clf(
+            emotion_generator(),
+            batch_size=batch_size,
+            truncation=True,
+            max_length=128,
+        )
+
+        emotion_rows = []
+        for res in tqdm(raw_results, total=len(emotion_inputs), desc="GoEmotions BERT"):
+            scores = {d["label"]: d["score"] for d in res}
+            emotion_rows.append({
+                nrc: float(sum(scores.get(g, 0.0) for g in go))
+                for nrc, go in GOEMOTIONS_TO_NRC.items()
+            })
+
+        emotion_df = pd.DataFrame(emotion_rows, index=df.index)
+        emotion_df = emotion_df[NRC_EMOTIONS]
+    else:
+        emotion_df = pd.DataFrame(df[text_col].apply(score_emotions).tolist(), index=df.index)
+
     emotion_df.columns = [f'emotion_{e}' for e in NRC_EMOTIONS]
+    # Drop any generic emotion columns from a previous backend pass so a second
+    # call (e.g. running both backends) overwrites rather than duplicates them.
+    stale_cols = [c for c in emotion_df.columns if c in df.columns]
+    if 'dominant_emotion' in df.columns:
+        stale_cols.append('dominant_emotion')
+    if stale_cols:
+        df = df.drop(columns=stale_cols)
     df = pd.concat([df, emotion_df], axis=1)
 
     emotion_cols = list(emotion_df.columns)
@@ -126,22 +202,33 @@ def derive_player_sentiment_scores(df: pd.DataFrame) -> dict[str, list[float]]:
     return {"sinner_scores": sinner_scores, "alcaraz_scores": alcaraz_scores}
 
 
-def run_nlp_enrichment(df: pd.DataFrame, output_filepath: str = "data/sinner_alcaraz_processed.csv") -> dict:
-    """Enrich crawled posts with cleaned text, RoBERTa sentiment, NRC emotions, NER and entity links.
+def run_nlp_enrichment(df: pd.DataFrame, output_filepath: str = "data/sinner_alcaraz_processed.csv", emotion_backend: str = "both") -> dict:
+    """Enrich crawled posts with cleaned text, RoBERTa sentiment, emotions, NER and entity links.
 
     Writes the enriched DataFrame to output_filepath and returns it together with
     per-player sentiment score buckets.
+
+    The ``emotion_backend`` parameter selects the emotion-scoring engine(s):
+      - "nrc"  : NRCLex affect frequencies only.
+      - "bert" : GoEmotions (RoBERTa) only; also aliased to `bert_emotion_*` /
+                 `bert_dominant_emotion` columns.
+      - "both" : (default) run both backends. The generic `emotion_*` /
+                 `dominant_emotion` columns hold the most recently computed
+                 (BERT) backend, and both are additionally preserved under the
+                 `nrc_emotion_*` / `nrc_dominant_emotion` and `bert_emotion_*` /
+                 `bert_dominant_emotion` column families for side-by-side
+                 comparison.
     """
     df = df.copy()
     total_posts = len(df)
     print(f"[NLP] Starting BERT/RoBERTa NLP enrichment for {total_posts} posts...")
 
-    print("[NLP] Step 1/5: Cleaning and preprocessing post text...")
+    print("[NLP] Step 1/6: Cleaning and preprocessing post text...")
     df['cleaned_text'] = df['text'].apply(clean_text)
     df['preprocessed_text'] = df['text'].apply(preprocess)
-    print("[NLP] Step 1/5 completed.")
+    print("[NLP] Step 1/6 completed.")
 
-    print("[NLP] Step 2/5: Scoring RoBERTa sentiments on GPU...")
+    print("[NLP] Step 2/6: Scoring RoBERTa sentiments on GPU...")
     # Initialize pipeline
     device = 0 if torch.cuda.is_available() else -1
     print(f"[NLP] Initializing CardiffNLP RoBERTa model on device={device}...")
@@ -199,19 +286,43 @@ def run_nlp_enrichment(df: pd.DataFrame, output_filepath: str = "data/sinner_alc
 
     df['sentiment_category'] = sentiment_categories
     df['sentiment_compound'] = sentiment_compounds
-    print("[NLP] Step 2/5 completed.")
+    print("[NLP] Step 2/6 completed.")
 
-    print("[NLP] Step 3/5: Running NRC Emotion Lexicon analysis...")
-    df = add_emotion_columns(df, text_col='cleaned_text')
-    print("[NLP] Step 3/5 completed.")
+    if emotion_backend == "nrc":
+        print("[NLP] Step 3/6: Running NRC Emotion Lexicon analysis...")
+        df = add_emotion_columns(df, text_col='cleaned_text', backend='nrc')
+        print("[NLP] Step 3/6 completed.")
+        # bert_emotion_* columns will be absent — that is expected.
+    elif emotion_backend == "bert":
+        print("[NLP] Step 3/6: Running GoEmotions BERT emotion analysis...")
+        df = add_emotion_columns(df, text_col='cleaned_text', backend='bert')
+        # Alias bert_ prefix columns from the generic emotion_* ones:
+        for e in NRC_EMOTIONS:
+            df[f'bert_emotion_{e}'] = df[f'emotion_{e}']
+        df['bert_dominant_emotion'] = df['dominant_emotion']
+        print("[NLP] Step 3/6 completed.")
+    else:
+        print("[NLP] Step 3/6: Running NRC Emotion Lexicon analysis...")
+        df = add_emotion_columns(df, text_col='cleaned_text', backend='nrc')
+        for e in NRC_EMOTIONS:
+            df[f'nrc_emotion_{e}'] = df[f'emotion_{e}']
+        df['nrc_dominant_emotion'] = df['dominant_emotion']
+        print("[NLP] Step 3/6 completed.")
 
-    print("[NLP] Step 4/5: Extracting Named Entities (spaCy NER)...")
+        print("[NLP] Step 4/6: Running GoEmotions BERT emotion analysis...")
+        df = add_emotion_columns(df, text_col='cleaned_text', backend='bert')
+        for e in NRC_EMOTIONS:
+            df[f'bert_emotion_{e}'] = df[f'emotion_{e}']
+        df['bert_dominant_emotion'] = df['dominant_emotion']
+        print("[NLP] Step 4/6 completed.")
+
+    print("[NLP] Step 5/6: Extracting Named Entities (spaCy NER)...")
     df['entities'] = df['cleaned_text'].apply(extract_ner)
-    print("[NLP] Step 4/5 completed.")
+    print("[NLP] Step 5/6 completed.")
 
-    print("[NLP] Step 5/5: Linking entities to DBpedia resources...")
+    print("[NLP] Step 6/6: Linking entities to DBpedia resources...")
     df['linked_entities'] = df['cleaned_text'].apply(link_entities_dbpedia)
-    print("[NLP] Step 5/5 completed.")
+    print("[NLP] Step 6/6 completed.")
 
     scores = derive_player_sentiment_scores(df)
 
@@ -233,10 +344,15 @@ def plot_community_emotion_profiles(
     top_k: int = 5,
     sort_by: str = "post_volume",
     cmap_name: str = "tab20",
+    backend: str = "nrc",
 ) -> None:
-    """Plot average NRC emotion profiles for the top-k communities of the filtered graph Gu.
+    """Plot average emotion profiles for the top-k communities of the filtered graph Gu.
 
     Communities are selected either by post volume or by node count (sort_by).
+    The ``backend`` chooses which emotion column family to chart:
+      - "nrc"  : the generic `emotion_*` columns (subtitle "NRC Emotion Lexicon").
+      - "bert" : the `bert_emotion_*` columns (subtitle "GoEmotions (BERT)").
+    The output filename is suffixed with the backend name.
     """
     author_community = {}
     for handle in df['author_handle']:
@@ -254,7 +370,8 @@ def plot_community_emotion_profiles(
         filtered = {n: c for n, c in node_to_community.items() if n in Gu.nodes()}
         top_comms = [cid for cid, _ in Counter(filtered.values()).most_common(top_k)]
 
-    emotion_cols = [f'emotion_{e}' for e in NRC_EMOTIONS]
+    col_prefix = 'bert_emotion_' if backend == "bert" else 'emotion_'
+    emotion_cols = [f'{col_prefix}{e}' for e in NRC_EMOTIONS]
     records = []
     custom_palette = {}
     color_map = get_community_color_map(node_to_community, cmap_name=cmap_name)
@@ -267,22 +384,56 @@ def plot_community_emotion_profiles(
         custom_palette[label] = color_map.get(cid)
         avg_scores = comm_posts[emotion_cols].mean()
         for col in emotion_cols:
-            records.append({"Community": label, "Emotion": col.replace('emotion_', ''), "Score": avg_scores[col]})
+            records.append({"Community": label, "Emotion": col.replace(col_prefix, ''), "Score": avg_scores[col]})
 
     df_plot = pd.DataFrame(records)
     if df_plot.empty:
         return
 
+    subtitle = "GoEmotions (BERT)" if backend == "bert" else "NRC Emotion Lexicon"
     plt.figure(figsize=(12, 6))
     sns.barplot(data=df_plot, x="Emotion", y="Score", hue="Community", palette=custom_palette)
-    plt.title(f"Average Emotion Profiles per Community{title_suffix}\n(NRC Emotion Lexicon)", fontsize=14, pad=15)
+    plt.title(f"Average Emotion Profiles per Community{title_suffix}\n({subtitle})", fontsize=14, pad=15)
     plt.xlabel("Emotion Category")
     plt.ylabel("Mean Normalized Score")
     plt.legend(title="Community")
     plt.tight_layout()
 
     suffix_filename = title_suffix.replace(' ', '_').replace('(', '').replace(')', '')
-    save_plot_copies(f"community_emotion_profiles{suffix_filename}.png", output_dir=output_dir)
+    save_plot_copies(f"community_emotion_profiles{suffix_filename}_{backend}.png", output_dir=output_dir)
+    plt.close()
+
+
+def plot_emotion_backend_comparison(df: pd.DataFrame, output_dir: str = "plots") -> None:
+    """Plot a grouped bar chart comparing dominant-emotion distributions of both backends.
+
+    Requires the `nrc_dominant_emotion` and `bert_dominant_emotion` columns produced
+    by ``run_nlp_enrichment(..., emotion_backend='both')``; if either is missing the
+    function prints a warning and returns without plotting.
+    """
+    if 'nrc_dominant_emotion' not in df.columns or 'bert_dominant_emotion' not in df.columns:
+        print("Warning: 'nrc_dominant_emotion'/'bert_dominant_emotion' columns not found. Skipping plot.")
+        return
+
+    emotion_index = NRC_EMOTIONS + ["neutral"]
+    nrc_dist = df['nrc_dominant_emotion'].value_counts(normalize=True).reindex(emotion_index, fill_value=0.0)
+    bert_dist = df['bert_dominant_emotion'].value_counts(normalize=True).reindex(emotion_index, fill_value=0.0)
+
+    records = []
+    for emotion in emotion_index:
+        records.append({"Emotion": emotion, "Share of posts": float(nrc_dist[emotion]), "Backend": "NRC"})
+        records.append({"Emotion": emotion, "Share of posts": float(bert_dist[emotion]), "Backend": "BERT"})
+    df_plot = pd.DataFrame(records)
+
+    plt.figure(figsize=(12, 6))
+    sns.barplot(data=df_plot, x="Emotion", y="Share of posts", hue="Backend")
+    plt.title("Dominant Emotion Distribution: NRC vs GoEmotions (BERT)", fontsize=14, pad=15)
+    plt.xlabel("Emotion Category")
+    plt.ylabel("Share of posts")
+    plt.legend(title="Backend")
+    plt.tight_layout()
+
+    save_plot_copies("emotion_backend_comparison.png", output_dir=output_dir)
     plt.close()
 
 
