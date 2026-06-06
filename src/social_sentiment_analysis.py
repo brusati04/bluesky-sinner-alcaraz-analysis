@@ -156,12 +156,21 @@ def add_emotion_columns(df: pd.DataFrame, text_col: str = 'cleaned_text', backen
         )
 
         emotion_rows = []
+        dominant_emotions = []
         for res in tqdm(raw_results, total=len(emotion_inputs), desc="GoEmotions BERT"):
             scores = {d["label"]: d["score"] for d in res}
-            emotion_rows.append({
+            nrc_scores = {
                 nrc: float(sum(scores.get(g, 0.0) for g in go))
                 for nrc, go in GOEMOTIONS_TO_NRC.items()
-            })
+            }
+            emotion_rows.append(nrc_scores)
+            
+            # If the raw max predicted score is 'neutral', classify dominant as 'neutral'
+            raw_max_label = max(scores, key=scores.get)
+            if raw_max_label == "neutral":
+                dominant_emotions.append("neutral")
+            else:
+                dominant_emotions.append(max(nrc_scores, key=nrc_scores.get))
 
         emotion_df = pd.DataFrame(emotion_rows, index=df.index)
         emotion_df = emotion_df[NRC_EMOTIONS]
@@ -178,9 +187,12 @@ def add_emotion_columns(df: pd.DataFrame, text_col: str = 'cleaned_text', backen
         df = df.drop(columns=stale_cols)
     df = pd.concat([df, emotion_df], axis=1)
 
-    emotion_cols = list(emotion_df.columns)
-    df['dominant_emotion'] = df[emotion_cols].idxmax(axis=1).str.replace('emotion_', '')
-    df.loc[df[emotion_cols].sum(axis=1) == 0, 'dominant_emotion'] = 'neutral'
+    if backend == "bert":
+        df['dominant_emotion'] = dominant_emotions
+    else:
+        emotion_cols = list(emotion_df.columns)
+        df['dominant_emotion'] = df[emotion_cols].idxmax(axis=1).str.replace('emotion_', '')
+        df.loc[df[emotion_cols].sum(axis=1) == 0, 'dominant_emotion'] = 'neutral'
     return df
 
 
