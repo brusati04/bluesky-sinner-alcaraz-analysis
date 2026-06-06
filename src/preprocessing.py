@@ -13,8 +13,6 @@ from nltk.corpus import stopwords
 
 from utils import parse_list_col, build_did_to_handle
 
-LIST_COLUMNS = ['mentions', 'hashtags', 'links', 'linked_entities']
-
 # Ensure the NLTK resources required for tokenisation/stopwords are available.
 for _resource in ['stopwords', 'punkt', 'punkt_tab']:
     try:
@@ -99,7 +97,8 @@ def load_and_preprocess_data(filepath: str = "data/sinner_alcaraz_posts.csv") ->
 def load_processed_data(filepath: str) -> tuple[pd.DataFrame, dict]:
     """Load an already NLP-enriched dataset from CSV, restoring list columns and the DID->handle map."""
     df = pd.read_csv(filepath, parse_dates=['created_at'])
-    for col in LIST_COLUMNS:
+    list_columns = ['mentions', 'hashtags', 'links', 'linked_entities']
+    for col in list_columns:
         if col in df.columns:
             df[col] = df[col].apply(parse_list_col)
     return df, build_did_to_handle(df)
