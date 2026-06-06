@@ -11,17 +11,22 @@ from typing import Dict, Tuple, List, Optional
 from social_sentiment_analysis import (
     W_SENTIMENT,
     W_FREQUENCY,
-    SINNER_URI,
-    ALCARAZ_URI,
-    SINNER_KEYWORDS,
-    ALCARAZ_KEYWORDS,
 )
 
 # For community colors
 from social_network_analysis import get_community_color_map
 
-# For saving plots
-from utils import save_plot_copies
+# For saving plots and NLP helpers
+from utils import (
+    save_plot_copies,
+    render_flat_chart,
+    get_sentiment_clf_roberta,
+    detect_player_mentions,
+    SINNER_URI,
+    ALCARAZ_URI,
+    SINNER_KEYWORDS,
+    ALCARAZ_KEYWORDS,
+)
 
 # Sentence tokenization
 try:
@@ -32,31 +37,11 @@ except LookupError:
     from nltk.tokenize import sent_tokenize
 
 # Configuration Constants
-STANCE_THRESHOLD = 0.05
+STANCE_THRESHOLD = 0.03
 MIN_POSTS_FOR_STANCE = 1
 DEBUG = True
 
-# Lazily-initialised RoBERTa sentiment classifier
-_sentiment_clf_roberta = None
-
-def _get_sentiment_clf_roberta():
-    global _sentiment_clf_roberta
-    if _sentiment_clf_roberta is None:
-        import torch
-        from transformers import pipeline
-        # Set cache dir
-        workspace_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        os.environ["HF_HOME"] = os.path.abspath(os.path.join(workspace_path, ".huggingface_cache"))
-        
-        device = 0 if torch.cuda.is_available() else -1
-        print(f"[STANCE] Initializing CardiffNLP RoBERTa sentiment model for sentence scoring on device={device}...")
-        _sentiment_clf_roberta = pipeline(
-            "sentiment-analysis",
-            model="cardiffnlp/twitter-roberta-base-sentiment-latest",
-            device=device,
-            top_k=None
-        )
-    return _sentiment_clf_roberta
+# Using get_sentiment_clf_roberta from utils for model operations
 
 
 def _sentence_sentiment(sentence: str) -> float:
@@ -69,7 +54,7 @@ def _sentence_sentiment(sentence: str) -> float:
     if not cleaned.strip():
         return 0.0
         
-    clf = _get_sentiment_clf_roberta()
+    clf = get_sentiment_clf_roberta()
     res = clf(cleaned, truncation=True, max_length=512)
     scores_dict = {d['label']: d['score'] for d in res[0]}
     
@@ -128,29 +113,16 @@ def _split_dual_mention(text: str, sentence_scores: Dict[str, float]) -> Tuple[f
 
 def detect_players(df: pd.DataFrame) -> pd.DataFrame:
     """Add is_sinner / is_alcaraz boolean columns using linked_entities and keyword fallback."""
+    if 'is_sinner' in df.columns and 'is_alcaraz' in df.columns:
+        return df
+
     def _detect_row(row):
-        uris = set()
-        linked = row.get('linked_entities', [])
-        if isinstance(linked, list):
-            for ent in linked:
-                if isinstance(ent, dict):
-                    uris.add(ent.get('uri', ''))
-                elif isinstance(ent, (tuple, list)) and len(ent) > 0:
-                    uris.add(ent[0])
-        
-        is_sinner = SINNER_URI in uris
-        is_alcaraz = ALCARAZ_URI in uris
-        
-        if not is_sinner and not is_alcaraz:
-            text = str(row.get('text', '')).lower()
-            is_sinner = any(kw in text for kw in SINNER_KEYWORDS)
-            is_alcaraz = any(kw in text for kw in ALCARAZ_KEYWORDS)
-        
-        return is_sinner, is_alcaraz
+        return detect_player_mentions(row.get('text', ''), row.get('linked_entities', []))
     
     detection = df.apply(_detect_row, axis=1, result_type='expand')
     detection.columns = ['is_sinner', 'is_alcaraz']
     return pd.concat([df, detection], axis=1)
+
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -199,7 +171,7 @@ def compute_post_stances(df: pd.DataFrame) -> pd.DataFrame:
         sentence_scores = {}
         
         if unique_list:
-            clf = _get_sentiment_clf_roberta()
+            clf = get_sentiment_clf_roberta()
             batch_size = 128
             
             from preprocessing import clean_text_bert
@@ -396,6 +368,31 @@ def polarization_metrics(G: nx.Graph, user_stances: pd.DataFrame) -> Dict:
 # VISUALIZATION
 # ═════════════════════════════════════════════════════════════════════
 
+def _prepare_stance_results_data(
+    user_stances: pd.DataFrame,
+    community_profiles: pd.DataFrame,
+    node_to_community: Dict
+) -> dict:
+    """Prepare intermediate dataset metrics, groupings, and palettes for plot_stance_results."""
+    stance_counts = user_stances['stance_leaning'].value_counts()
+    scores = user_stances['net_stance'].dropna()
+    
+    top_comms = community_profiles.head(10).copy()
+    cmap = get_community_color_map(node_to_community)
+    top_comms = top_comms.sort_values('mean_stance')
+    top_comms['label'] = top_comms.apply(
+        lambda r: f"C{r['community_id']} ({r['dominant_lean'][:1].upper()}, n={r['size']})", axis=1
+    )
+    top_comms_colors = [cmap.get(cid, 'gray') for cid in top_comms['community_id']]
+
+    return {
+        "stance_counts": stance_counts,
+        "scores": scores,
+        "top_comms": top_comms,
+        "top_comms_colors": top_comms_colors
+    }
+
+
 def plot_stance_results(
     user_stances: pd.DataFrame,
     community_profiles: pd.DataFrame,
@@ -404,13 +401,15 @@ def plot_stance_results(
     output_dir: str = "plots"
 ) -> None:
     """Create a 4-panel figure summarizing stance results."""
+    data = _prepare_stance_results_data(user_stances, community_profiles, node_to_community)
+    
     sns.set_style("whitegrid")
     fig = plt.figure(figsize=(16, 10))
     fig.suptitle("Stance Analysis Summary", fontsize=18, weight='bold', y=0.97)
     
     # 1. User Stance Distribution
     ax1 = fig.add_subplot(2, 2, 1)
-    stance_counts = user_stances['stance_leaning'].value_counts()
+    stance_counts = data["stance_counts"]
     colors = {'sinner': '#1f77b4', 'alcaraz': '#d62728', 'neutral': '#7f7f7f'}
     bar_colors = [colors.get(label, '#7f7f7f') for label in stance_counts.index]
     ax1.bar(stance_counts.index, stance_counts.values, color=bar_colors, edgecolor='black')
@@ -421,7 +420,7 @@ def plot_stance_results(
     
     # 2. Net Stance Score Distribution
     ax2 = fig.add_subplot(2, 2, 2)
-    scores = user_stances['net_stance'].dropna()
+    scores = data["scores"]
     ax2.hist(scores, bins=50, color='darkorange', edgecolor='black', alpha=0.8)
     ax2.axvline(STANCE_THRESHOLD, color='blue', linestyle='--', linewidth=2, label=f'Sinner threshold (+{STANCE_THRESHOLD})')
     ax2.axvline(-STANCE_THRESHOLD, color='red', linestyle='--', linewidth=2, label=f'Alcaraz threshold (-{STANCE_THRESHOLD})')
@@ -433,15 +432,10 @@ def plot_stance_results(
     
     # 3. Community Stance Profiles (top 10)
     ax3 = fig.add_subplot(2, 2, 3)
-    top_comms = community_profiles.head(10).copy()
-    cmap = get_community_color_map(node_to_community)
-    top_comms = top_comms.sort_values('mean_stance')
-    top_comms['label'] = top_comms.apply(
-        lambda r: f"C{r['community_id']} ({r['dominant_lean'][:1].upper()}, n={r['size']})", axis=1
-    )
-    bars = ax3.barh(top_comms['label'], top_comms['mean_stance'], 
-                    color=[cmap.get(cid, 'gray') for cid in top_comms['community_id']],
-                    edgecolor='black')
+    top_comms = data["top_comms"]
+    ax3.barh(top_comms['label'], top_comms['mean_stance'], 
+            color=data["top_comms_colors"],
+            edgecolor='black')
     ax3.axvline(0, color='gray', linewidth=1)
     ax3.set_title("Top Communities - Mean Stance Score", fontsize=13, weight='bold')
     ax3.set_xlabel("Mean Stance (positive = pro-Sinner)")
@@ -464,9 +458,11 @@ def plot_stance_results(
              verticalalignment='center', 
              bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
     
-    plt.tight_layout()
-    save_plot_copies("stance_analysis_summary.png", output_dir=output_dir)
-    plt.close()
+    render_flat_chart(
+        fig=fig,
+        filename="stance_analysis_summary.png",
+        output_dir=output_dir,
+    )
     print(f"[STANCE] Plot saved to {output_dir}/stance_analysis_summary.png")
 
 
@@ -499,6 +495,15 @@ def sample_dual_mention_posts(df: pd.DataFrame, n: int = 30) -> pd.DataFrame:
     return sample[['text', 'sentiment_compound', 'split_sinner', 'split_alcaraz', 'split_diff']]
 
 
+def _safe_print_text(text: str) -> None:
+    try:
+        import sys
+        enc = sys.stdout.encoding or 'utf-8'
+        print(text.encode(enc, errors='replace').decode(enc))
+    except Exception:
+        print(text.encode('ascii', errors='replace').decode('ascii'))
+
+
 def print_post_samples(df: pd.DataFrame):
     """Print example dual-mention posts with their split scores."""
     sample = sample_dual_mention_posts(df, n=30)
@@ -513,7 +518,7 @@ def print_post_samples(df: pd.DataFrame):
     for i, (_, row) in enumerate(sample.head(15).iterrows()):
         text = str(row['text'])[:120].replace('\n', ' ')
         print(f"\n--- Post {i+1} (diff={row['split_diff']:.2f}) ---")
-        print(f"Text:       {text}...")
+        _safe_print_text(f"Text:       {text}...")
         print(f"Compound:   {row['sentiment_compound']:.3f}")
         print(f"Sinner:     {row['split_sinner']:.3f}")
         print(f"Alcaraz:    {row['split_alcaraz']:.3f}")
@@ -676,7 +681,6 @@ def synthetic_polarization_test():
     
     return user_synth
 
-
 def post_quality_analysis(df: pd.DataFrame):
     """Check if posts are suitable for sentiment analysis."""
     df = df.copy()
@@ -743,37 +747,31 @@ def run_stance_propagation(
     run_diagnostics: bool = True
 ) -> Dict:
     """
-    Main stance pipeline: post -> user -> graph -> community -> metrics -> plots.
-    
-    Parameters:
-        df: Processed posts DataFrame with columns:
-            linked_entities, sentiment_compound, text, author_handle
-        Gu: Undirected NetworkX graph
-        Gd: Directed NetworkX graph
-        df_cent: Centrality DataFrame with 'user' column
-        threshold: Net stance threshold for partisan classification
-        min_posts: Minimum posts required for a user to be analyzed
-        output_dir: Directory to save plots
-        run_diagnostics: Whether to print comprehensive diagnostics
-    
-    Returns:
-        Dictionary with all results
+    Main stance pipeline Phase 3: compute aggregations (community profiles, polarization),
+    run fanbase study, and output diagnostics/plots using precomputed columns in frozen df.
     """
     print("\n" + "=" * 60)
-    print("STANCE PROPAGATION - STARTING")
+    print("STANCE PROPAGATION (PHASE 3) - STARTING")
     print("=" * 60)
     
-    # 1. Player detection
-    df = detect_players(df)
+    # 1. Reconstruct user_stances from precomputed columns in frozen df
+    grouped = df.groupby('author_handle')
+    user_stances = grouped.agg(
+        mean_sinner=('stance_sinner', 'mean'),
+        mean_alcaraz=('stance_alcaraz', 'mean'),
+        n_sinner=('is_sinner', 'sum'),
+        n_alcaraz=('is_alcaraz', 'sum'),
+        post_count=('stance_sinner', 'count'),
+        net_stance=('author_stance_score', 'first'),
+        stance_leaning=('author_stance_leaning', 'first')
+    )
+    user_stances = user_stances[user_stances['post_count'] >= min_posts]
     
-    # 2. Post-level stance scores
-    df = compute_post_stances(df)
+    total_mentions = user_stances['n_sinner'] + user_stances['n_alcaraz']
+    user_stances['freq_sinner'] = (user_stances['n_sinner'] / total_mentions.replace(0, np.nan)).fillna(0)
+    user_stances['freq_alcaraz'] = (user_stances['n_alcaraz'] / total_mentions.replace(0, np.nan)).fillna(0)
     
-    # 3. User-level net stance
-    user_stances = compute_user_stances(df, min_posts=min_posts)
-    user_stances = classify_stances(user_stances, threshold=threshold)
-    
-    # 4. Map onto graph nodes
+    # 2. Map onto graph nodes (if not already set)
     f_prop = user_stances['net_stance'].to_dict()
     stance_leanings = user_stances['stance_leaning'].to_dict()
     
@@ -782,28 +780,24 @@ def run_stance_propagation(
     nx.set_node_attributes(Gu, stance_leanings, 'stance_leaning')
     nx.set_node_attributes(Gd, stance_leanings, 'stance_leaning')
     
-    # 5. Update centrality DataFrame
-    df_cent['stance_score'] = df_cent['user'].map(f_prop)
-    df_cent['stance_leaning'] = df_cent['user'].map(stance_leanings)
-    
-    # 6. Community profiles
+    # 3. Community profiles
     partition = nx.get_node_attributes(Gu, 'community')
     if not partition:
         print("[STANCE] Warning: No community partition found. Assigning all nodes to community 0.")
         partition = {n: 0 for n in Gu.nodes()}
     community_profiles = community_stance_profiles(Gu, user_stances, partition)
     
-    # 7. Polarization metrics
+    # 4. Polarization metrics
     polar_metrics = polarization_metrics(Gu, user_stances)
     
-    # 8. Summary
+    # 5. Summary logs
     total = len(user_stances)
     counts = user_stances['stance_leaning'].value_counts()
     sinner_n = counts.get('sinner', 0)
     alcaraz_n = counts.get('alcaraz', 0)
     neutral_n = counts.get('neutral', 0)
     
-    print(f"\n[STANCE] Classification Complete")
+    print(f"\n[STANCE] Classification Summary (from Frozen Dataset)")
     print(f"  Total users analyzed: {total}")
     print(f"  Pro-Sinner:  {sinner_n:>5} ({sinner_n/total*100:.1f}%)")
     print(f"  Pro-Alcaraz: {alcaraz_n:>5} ({alcaraz_n/total*100:.1f}%)")
@@ -814,25 +808,25 @@ def run_stance_propagation(
     print(f"\n[STANCE] Top 5 Communities by Size:")
     print(community_profiles.head(5).to_string(index=False))
     
-    # 9. Plot
+    # 6. Plot Stance results
     try:
         plot_stance_results(user_stances, community_profiles, polar_metrics, 
-                           partition, output_dir=output_dir)
+                            partition, output_dir=output_dir)
     except Exception as e:
         print(f"[STANCE] Plotting failed: {e}")
     
-    # 10. Run Fanbase Study
+    # 7. Run Fanbase Study
     try:
         run_fanbase_study(user_stances, output_dir=output_dir)
     except Exception as e:
         print(f"[STANCE] Fanbase study failed: {e}")
 
-    # 11. Diagnostics
+    # 8. Diagnostics
     if run_diagnostics:
         run_all_diagnostics(df, user_stances)
     
     print("\n" + "=" * 60)
-    print("STANCE PROPAGATION - COMPLETE")
+    print("STANCE PROPAGATION (PHASE 3) - COMPLETE")
     print("=" * 60 + "\n")
     
     return {
@@ -843,6 +837,8 @@ def run_stance_propagation(
         'threshold': threshold,
         'min_posts': min_posts
     }
+
+
 
 
 def run_fanbase_study(user_stances: pd.DataFrame, output_dir: str = "plots") -> pd.DataFrame:
@@ -908,6 +904,18 @@ def run_fanbase_study(user_stances: pd.DataFrame, output_dir: str = "plots") -> 
     print(f"  * Partisans moved to Neutral when sentiment filter applied: Sinner -> {len(s_to_n)}, Alcaraz -> {len(a_to_n)}")
     
     # Plotting comparison
+    plot_fanbase_study_comparison(baseline_counts, refined_counts, output_dir=output_dir)
+        
+    print("=" * 80 + "\n")
+    return user_stances
+
+
+def plot_fanbase_study_comparison(
+    baseline_counts: pd.Series,
+    refined_counts: pd.Series,
+    output_dir: str = "plots"
+) -> None:
+    """Generate fanbase comparison plots comparing baseline frequency vs sentiment-aware leanings."""
     try:
         sns.set_style("whitegrid")
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -924,7 +932,6 @@ def run_fanbase_study(user_stances: pd.DataFrame, output_dir: str = "plots") -> 
         rects2 = ax.bar(x + width/2, refined_vals, width, label='Refined (RoBERTa Sentiment-Aware)', color=['#d35400', '#023e8a', '#7f7f7f'], edgecolor='black')
         
         ax.set_ylabel('Number of Users', fontsize=12)
-        ax.set_title('Fanbase Classification: Baseline Frequency vs. Sentiment-Aware Leaning', fontsize=14, weight='bold', pad=15)
         ax.set_xticks(x)
         ax.set_xticklabels(categories, fontsize=11)
         ax.legend(fontsize=10)
@@ -942,15 +949,17 @@ def run_fanbase_study(user_stances: pd.DataFrame, output_dir: str = "plots") -> 
         autolabel(rects1)
         autolabel(rects2)
         
-        plt.tight_layout()
-        save_plot_copies("fanbase_classification_comparison.png", output_dir=output_dir)
-        plt.close()
+        render_flat_chart(
+            fig=fig,
+            filename="fanbase_classification_comparison.png",
+            output_dir=output_dir,
+            title='Fanbase Classification: Baseline Frequency vs. Sentiment-Aware Leaning',
+            title_pad=15,
+            title_weight='bold',
+        )
         print(f"[STANCE] Fanbase comparison plot saved to {output_dir}/fanbase_classification_comparison.png")
     except Exception as e:
         print(f"[STANCE] Fanbase comparison plotting failed: {e}")
-        
-    print("=" * 80 + "\n")
-    return user_stances
 # Add to stance_analysis.py and call from main.py
 
 def print_community_196_posts(df: pd.DataFrame, Gu: nx.Graph, community_id: int = 196):
@@ -978,5 +987,5 @@ def print_community_196_posts(df: pd.DataFrame, Gu: nx.Graph, community_id: int 
         sentiment = row.get('sentiment_compound', 0)
         author = row.get('author_handle', 'unknown')
         print(f"\n[{i}/{len(comm_posts)}] [{sentiment:+.3f}] {author}")
-        print(text)
+        _safe_print_text(text)
         print("-" * 80)

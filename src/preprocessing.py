@@ -117,17 +117,49 @@ def prepare_dataset(raw_filepath: str, processed_filepath: str) -> tuple[Optiona
     Loads a cached processed file when available; otherwise runs the full NLP
     enrichment over the raw crawled posts. Returns (None, None) if raw input is missing.
     """
+    df = None
+    did_to_handle = None
     if os.path.exists(processed_filepath):
         print(f"[INFO] Processed dataset found at {processed_filepath}. Loading it directly...")
-        return load_data(processed_filepath, parse_linked_entities=True)
+        df, did_to_handle = load_data(processed_filepath, parse_linked_entities=True)
+    else:
+        raw_df, did_to_handle = load_data(raw_filepath, parse_linked_entities=False)
+        if raw_df is None:
+            return None, None
 
-    df, did_to_handle = load_data(raw_filepath, parse_linked_entities=False)
-    if df is None:
-        return None, None
+        from social_sentiment_analysis import run_nlp_enrichment
+        df = run_nlp_enrichment(raw_df, output_filepath=processed_filepath)["df"]
 
-    from social_sentiment_analysis import run_nlp_enrichment
-    df_processed = run_nlp_enrichment(df, output_filepath=processed_filepath)["df"]
-    return df_processed, did_to_handle
+    if df is not None:
+        # Enforce all Phase 1 stance & dominant emotion computations are present
+        cols_to_check = ['author_stance_score', 'author_stance_leaning', 'author_dominant_emotion_nrc', 'author_dominant_emotion_bert']
+        if not all(col in df.columns for col in cols_to_check):
+            print("[INFO] Adding stance and dominant emotion columns to processed dataset...")
+            from social_stance_analysis import compute_post_stances, compute_user_stances, classify_stances
+            
+            # Post stance
+            df = compute_post_stances(df)
+            # User stance
+            user_stances = compute_user_stances(df, min_posts=1)
+            user_stances = classify_stances(user_stances, threshold=0.05)
+            
+            # Map back to posts DataFrame
+            df['author_stance_score'] = df['author_handle'].map(user_stances['net_stance']).fillna(0.0)
+            df['author_stance_leaning'] = df['author_handle'].map(user_stances['stance_leaning']).fillna('neutral')
+            
+            # Map user dominant emotion back to df
+            for backend in ("nrc", "bert"):
+                col = "nrc_dominant_emotion" if backend == "nrc" else "bert_dominant_emotion"
+                user_emotions = df.groupby("author_handle")[col].agg(
+                    lambda s: s.mode().iloc[0] if not s.mode().empty else "neutral"
+                ).to_dict()
+                df[f'author_dominant_emotion_{backend}'] = df['author_handle'].map(user_emotions).fillna("neutral")
+                
+            # Overwrite the cache file with completed dataset
+            df.to_csv(processed_filepath, index=False)
+            print(f"[INFO] Processed dataset cache updated at {processed_filepath}")
+            
+    return df, did_to_handle
 
 
 def plot_community_wordcloud(df: pd.DataFrame, output_dir: str = "plots") -> None:

@@ -11,6 +11,9 @@ import matplotlib.patches as mpatches
 
 from utils import save_plot_copies
 
+# ─────────────────────────────────────────────────────────────────────────────
+# COSTANTI COSTRUTTIVE
+# ─────────────────────────────────────────────────────────────────────────────
 
 EMOTION_COLORS: dict[str, str] = {
     "anger":        "#e74c3c",
@@ -25,12 +28,12 @@ EMOTION_COLORS: dict[str, str] = {
 }
 
 
-def build_networks(df: pd.DataFrame, did_to_handle: dict) -> tuple[nx.Graph, nx.DiGraph]:
-    """Build undirected and directed interaction graphs from reply and mention relations.
+# ─────────────────────────────────────────────────────────────────────────────
+# PIPELINE DI ELABORAZIONE RETE (CORE METRICS)
+# ─────────────────────────────────────────────────────────────────────────────
 
-    Nodes are author handles (falling back to DIDs); edge weights count repeated
-    interactions. Self-loops are skipped.
-    """
+def build_networks(df: pd.DataFrame, did_to_handle: dict) -> tuple[nx.Graph, nx.DiGraph]:
+    """Build undirected and directed interaction graphs from reply and mention relations."""
     Gu = nx.Graph()
     Gd = nx.DiGraph()
 
@@ -62,10 +65,7 @@ def build_networks(df: pd.DataFrame, did_to_handle: dict) -> tuple[nx.Graph, nx.
 
 
 def calculate_centralities(Gu: nx.Graph, Gd: nx.DiGraph) -> dict:
-    """Compute degree/closeness/betweenness centralities (both graphs) plus PageRank on Gd.
-
-    Undirected centralities are also written back as node attributes on Gu.
-    """
+    """Compute degree/closeness/betweenness centralities plus PageRank on Gd."""
     deg_cent = nx.degree_centrality(Gu)
     close_cent = nx.closeness_centrality(Gu)
     between_cent = nx.betweenness_centrality(Gu)
@@ -97,26 +97,14 @@ def calculate_centralities(Gu: nx.Graph, Gd: nx.DiGraph) -> dict:
 
 
 def run_community_detection(Gu: nx.Graph, Gd: nx.DiGraph) -> dict:
-    """Detect communities (Louvain on Gu, Infomap on Gd) and compute global network statistics.
-
-    Writes community attributes back onto both graphs, prints a summary, saves global
-    metrics to data/network_global_metrics.csv, and returns all derived structures.
-    """
+    """Detect communities (Louvain on Gu, Infomap on Gd) and compute global network statistics."""
     if len(Gu.nodes()) <= 1:
         print("Graph too small for community detection / GCC calculation.")
         return {
-            "communities": [list(Gu.nodes())],
-            "modularity_score": 0.0,
-            "node_to_community": {},
-            "infomap_communities": [],
-            "infomap_modularity": 0.0,
-            "node_to_infomap": {},
-            "gcc": Gu,
-            "gcc_size": len(Gu.nodes()),
-            "gcc_fraction": 1.0 if len(Gu.nodes()) > 0 else 0.0,
-            "deg_assort_undir": 0.0,
-            "deg_assort_dir": 0.0,
-            "comm_assort_undir": 0.0,
+            "communities": [list(Gu.nodes())], "modularity_score": 0.0, "node_to_community": {},
+            "infomap_communities": [], "infomap_modularity": 0.0, "node_to_infomap": {},
+            "gcc": Gu, "gcc_size": len(Gu.nodes()), "gcc_fraction": 1.0,
+            "deg_assort_undir": 0.0, "deg_assort_dir": 0.0, "comm_assort_undir": 0.0,
         }
 
     communities = nx.community.louvain_communities(Gu)
@@ -126,7 +114,6 @@ def run_community_detection(Gu: nx.Graph, Gd: nx.DiGraph) -> dict:
     nx.set_node_attributes(Gu, node_to_community, "community")
     nx.set_node_attributes(Gd, node_to_community, "community")
 
-    # Infomap operates on integer node IDs, so map handles to indices and back.
     im = infomap.Infomap("--two-level --silent")
     node_to_id = {node: idx for idx, node in enumerate(Gd.nodes())}
     id_to_node = {idx: node for node, idx in node_to_id.items()}
@@ -165,29 +152,20 @@ def run_community_detection(Gu: nx.Graph, Gd: nx.DiGraph) -> dict:
 
     gcc_avg_path_length = gcc_diameter = gcc_radius = min_ecc = max_ecc = 0.0
     if gcc_size > 1:
-        try:
-            gcc_avg_path_length = nx.average_shortest_path_length(gcc)
-        except Exception:
-            gcc_avg_path_length = 0.0
+        try: gcc_avg_path_length = nx.average_shortest_path_length(gcc)
+        except Exception: gcc_avg_path_length = 0.0
         try:
             gcc_ecc = nx.eccentricity(gcc)
             gcc_diameter = nx.diameter(gcc, gcc_ecc)
             gcc_radius = nx.radius(gcc, gcc_ecc)
             min_ecc = min(gcc_ecc.values())
             max_ecc = max(gcc_ecc.values())
-        except Exception:
-            gcc_diameter = gcc_radius = min_ecc = max_ecc = 0.0
+        except Exception: pass
 
     print("\n" + "=" * 50)
     print("GLOBAL SOCIAL NETWORK STATISTICS")
     print("=" * 50)
     print(f"Network Density:                    {density:.6f}")
-    print(f"Network Transitivity:               {transitivity:.6f}")
-    print(f"Average Clustering Coefficient:     {avg_clustering:.6f}")
-    print(f"GCC Size:                           {gcc_size} nodes ({gcc_fraction*100:.2f}% of graph)")
-    print(f"GCC Average Shortest Path Length:   {gcc_avg_path_length:.4f}")
-    print(f"GCC Diameter (Max Eccentricity):    {gcc_diameter:.1f}")
-    print(f"GCC Radius (Min Eccentricity):      {gcc_radius:.1f}")
     print(f"Louvain Communities:                {len(communities)} (Modularity Q: {modularity_score:.4f})")
     print(f"Infomap Communities:                {len(infomap_communities)} (Modularity Q: {infomap_modularity:.4f})")
     print("=" * 50)
@@ -195,60 +173,30 @@ def run_community_detection(Gu: nx.Graph, Gd: nx.DiGraph) -> dict:
     try:
         os.makedirs("data", exist_ok=True)
         stats_df = pd.DataFrame({
-            "Metric": [
-                "Density", "Transitivity", "Average Clustering",
-                "GCC Size", "GCC Fraction", "GCC Avg Path Length",
-                "GCC Diameter", "GCC Radius", "GCC Min Eccentricity", "GCC Max Eccentricity",
-                "Louvain Modularity", "Infomap Modularity",
-            ],
-            "Value": [
-                density, transitivity, avg_clustering,
-                gcc_size, gcc_fraction, gcc_avg_path_length,
-                gcc_diameter, gcc_radius, min_ecc, max_ecc,
-                modularity_score, infomap_modularity,
-            ],
+            "Metric": ["Density", "Transitivity", "Average Clustering", "GCC Size", "GCC Fraction", "Louvain Modularity", "Infomap Modularity"],
+            "Value": [density, transitivity, avg_clustering, gcc_size, gcc_fraction, modularity_score, infomap_modularity],
         })
         stats_df.to_csv("data/network_global_metrics.csv", index=False)
     except Exception as e:
         print(f"Error saving global metrics: {e}")
 
-    try:
-        deg_assort_undir = nx.degree_assortativity_coefficient(Gu)
-    except Exception as e:
-        deg_assort_undir = 0.0
-        print("Error calculating undirected degree assortativity:", e)
-    try:
-        deg_assort_dir = nx.degree_assortativity_coefficient(Gd)
-    except Exception as e:
-        deg_assort_dir = 0.0
-        print("Error calculating directed degree assortativity:", e)
-    try:
-        comm_assort_undir = nx.attribute_assortativity_coefficient(Gu, "community")
-    except Exception as e:
-        comm_assort_undir = 0.0
-        print("Error calculating undirected community assortativity:", e)
+    try: deg_assort_undir = nx.degree_assortativity_coefficient(Gu)
+    except Exception: deg_assort_undir = 0.0
+    try: deg_assort_dir = nx.degree_assortativity_coefficient(Gd)
+    except Exception: deg_assort_dir = 0.0
+    try: comm_assort_undir = nx.attribute_assortativity_coefficient(Gu, "community")
+    except Exception: comm_assort_undir = 0.0
 
     return {
-        "louvain_communities": communities,
-        "modularity_score": modularity_score,
-        "node_to_louvain": node_to_community,
-        "infomap_communities": infomap_communities,
-        "infomap_modularity": infomap_modularity,
-        "node_to_infomap": node_to_infomap,
-        "gcc": gcc,
-        "gcc_size": gcc_size,
-        "gcc_fraction": gcc_fraction,
-        "deg_assort_undir": deg_assort_undir,
-        "deg_assort_dir": deg_assort_dir,
-        "comm_assort_undir": comm_assort_undir,
+        "louvain_communities": communities, "modularity_score": modularity_score, "node_to_louvain": node_to_community,
+        "infomap_communities": infomap_communities, "infomap_modularity": infomap_modularity, "node_to_infomap": node_to_infomap,
+        "gcc": gcc, "gcc_size": gcc_size, "gcc_fraction": gcc_fraction, "deg_assort_undir": deg_assort_undir,
+        "deg_assort_dir": deg_assort_dir, "comm_assort_undir": comm_assort_undir,
     }
 
 
 def save_initial_centrality_csv(
-    Gu: nx.Graph,
-    centralities: dict,
-    comm_data: dict,
-    filepath: str = "data/network_centrality_metrics.csv",
+    Gu: nx.Graph, centralities: dict, comm_data: dict, filepath: str = "data/network_centrality_metrics.csv"
 ) -> pd.DataFrame:
     """Assemble per-node centrality and community metrics into a DataFrame and save it to CSV."""
     multi_node = len(Gu.nodes()) > 1
@@ -275,54 +223,27 @@ def save_initial_centrality_csv(
 
 
 def get_community_color_map(node_to_community: dict, cmap_name: str = "viridis") -> dict:
-    """Map each community ID to a hex colour drawn from the named colormap.
-
-    Qualitative colormaps are indexed directly; continuous ones are sampled evenly.
-    """
+    """Map each community ID to a hex colour drawn from the named colormap."""
     unique_cids = sorted(set(node_to_community.values()))
     n = len(unique_cids)
-
-    try:
-        cmap = plt.colormaps.get_cmap(cmap_name)
-    except AttributeError:
-        cmap = plt.cm.get_cmap(cmap_name)
+    try: cmap = plt.colormaps.get_cmap(cmap_name)
+    except AttributeError: cmap = plt.cm.get_cmap(cmap_name)
 
     is_qualitative = cmap_name.lower().startswith(('pastel', 'paired', 'accent', 'dark2', 'set', 'tab'))
-
     color_map = {}
     for idx, cid in enumerate(unique_cids):
-        if is_qualitative:
-            rgba = cmap(idx % cmap.N)
-        else:
-            rgba = cmap(idx / (n - 1) if n > 1 else 0.5)
+        rgba = cmap(idx % cmap.N) if is_qualitative else cmap(idx / (n - 1) if n > 1 else 0.5)
         color_map[cid] = mcolors.to_hex(rgba)
     return color_map
 
 
-def get_filtered_networks(Gu: nx.Graph, Gd: nx.DiGraph, min_component_size: int = 10) -> tuple[nx.Graph, nx.DiGraph]:
-    """Return copies of Gu/Gd with connected components of size <= min_component_size removed."""
-    Gu_filtered = Gu.copy()
-    for component in list(nx.connected_components(Gu_filtered)):
-        if len(component) <= min_component_size:
-            Gu_filtered.remove_nodes_from(component)
+# ─────────────────────────────────────────────────────────────────────────────
+# NUOVA STRUTTURA SCALABILE: SEPARAZIONE FILTRAGGIO & RENDERING
+# ─────────────────────────────────────────────────────────────────────────────
 
-    Gd_filtered = Gd.copy()
-    for component in list(nx.weakly_connected_components(Gd_filtered)):
-        if len(component) <= min_component_size:
-            Gd_filtered.remove_nodes_from(component)
-
-    return Gu_filtered, Gd_filtered
-
-
-def _select_top_communities(
-    graph,
-    node_to_community: dict,
-    df_processed: pd.DataFrame,
-    top_k: int,
-    sort_by: str,
-) -> set:
-    """Return the set of top-k community IDs within `graph`, ranked by post volume or node count."""
-    if sort_by == "post_volume":
+def _select_top_communities(graph, node_to_community: dict, df_processed: Optional[pd.DataFrame], top_k: int, sort_by: str) -> set:
+    """Restituisce il set di ID delle top-k comunità filtrate per volume di post o nodi."""
+    if sort_by == "post_volume" and df_processed is not None:
         author_community = {
             handle: node_to_community[handle]
             for handle in df_processed['author_handle']
@@ -335,352 +256,233 @@ def _select_top_communities(
     return {cid for cid, _ in Counter(filtered.values()).most_common(top_k)}
 
 
-def plot_filtered_network_graph(
-    Gu: nx.Graph,
-    Gd: nx.DiGraph,
-    df_cent: pd.DataFrame,
-    comm_data: dict,
-    centralities: dict,
-    df_processed: pd.DataFrame,
+def extract_top_subgraph(
+    G: nx.Graph,
     min_component_size: int = 10,
-    output_dir: str = "plots/filtered",
-    top_k: int = 5,
-    sort_by: str = "post_volume",
-    cmap_undirected: str = "tab20",
-    cmap_directed: str = "tab20",
-) -> tuple[nx.Graph, nx.DiGraph, dict, dict]:
-    """Render network graphs restricted to large components and the top-k communities.
-
-    Drops components of size <= min_component_size, keeps only the top-k Louvain
-    (undirected) and Infomap (directed) communities, and reuses the full-graph spring
-    layouts so node positions stay stable.
-
-    Returns the filtered (Gu_plot, Gd_plot) graphs together with the (pos, pos_dir)
-    layouts used, so the emotion-coloured variant can redraw the identical figure.
-    """
-    Gu_plot = Gu.copy()
-    for component in list(nx.connected_components(Gu_plot)):
+    top_k_communities: Optional[int] = None,
+    node_to_community: Optional[dict] = None,
+    df_processed: Optional[pd.DataFrame] = None,
+    sort_by: str = "post_volume"
+) -> nx.Graph:
+    """Estrae un sottografo applicando i filtri di dimensione componente e top-k cluster."""
+    G_filtered = G.copy()
+    
+    # Filtro componenti isolati/piccoli
+    components = list(nx.weakly_connected_components(G_filtered)) if G_filtered.is_directed() else list(nx.connected_components(G_filtered))
+    for component in components:
         if len(component) <= min_component_size:
-            Gu_plot.remove_nodes_from(component)
+            G_filtered.remove_nodes_from(component)
+            
+    # Filtro basato sulle top-k comunità richieste
+    if top_k_communities and node_to_community:
+        top_comms = _select_top_communities(G_filtered, node_to_community, df_processed, top_k_communities, sort_by)
+        nodes_to_remove = [n for n in G_filtered.nodes() if node_to_community.get(n) not in top_comms]
+        G_filtered.remove_nodes_from(nodes_to_remove)
+        
+    return G_filtered
 
-    Gd_plot = Gd.copy()
-    for component in list(nx.weakly_connected_components(Gd_plot)):
-        if len(component) <= min_component_size:
-            Gd_plot.remove_nodes_from(component)
 
+def render_network(
+    G,
+    pos: dict,
+    node_colors: list,
+    node_sizes: list,
+    labels: dict,
+    title: str,
+    filename: str,
+    output_dir: str = "plots",
+    legend_patches: Optional[list] = None,
+    legend_title: Optional[str] = None,
+    legend_ncol: int = 2
+) -> None:
+    """Funzione universale e scalabile per disegnare grafi (diretti o indiretti) configurando stili a piacimento."""
+    if G.number_of_nodes() == 0:
+        print(f"Warning: Grafo vuoto per {filename}. Plot saltato.")
+        return
+
+    fig, ax = plt.subplots(figsize=(12, 12))
+    
+    # Rendering degli archi
+    if G.is_directed():
+        nx.draw_networkx_edges(G, pos, ax=ax, alpha=0.2, edge_color="grey",
+                               arrows=True, arrowstyle='-|>', arrowsize=12, connectionstyle="arc3,rad=0.1")
+    else:
+        nx.draw_networkx_edges(G, pos, ax=ax, alpha=0.15, edge_color="grey")
+        
+    # Rendering dei nodi
+    nx.draw_networkx_nodes(G, pos, ax=ax, node_size=node_sizes, node_color=node_colors, 
+                           alpha=0.9, edgecolors='black', linewidths=0.5)
+    
+    # Rendering delle etichette (Label)
+    if labels:
+        nx.draw_networkx_labels(G, pos, ax=ax, labels=labels, font_size=9, font_weight="bold", font_color="#1e272c")
+        
+    # Inserimento Legenda personalizzata
+    if legend_patches:
+        ax.legend(handles=legend_patches, loc="lower left", fontsize=10, 
+                  title=legend_title, title_fontsize=11, framealpha=0.85, ncol=legend_ncol)
+
+    ax.set_title(title, pad=15)
+    ax.axis("off")
+    plt.tight_layout()
+    save_plot_copies(filename, output_dir=output_dir)
+    plt.close(fig)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RETROCOMPATIBILITÀ: WRAPPERS RIORGANIZZATI SULLA LOGICA UNIFICATA
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_filtered_networks(Gu: nx.Graph, Gd: nx.DiGraph, min_component_size: int = 10) -> tuple[nx.Graph, nx.DiGraph]:
+    """Estrazione dei componenti filtrati (funzione mantenuta per stance analysis)."""
+    return extract_top_subgraph(Gu, min_component_size), extract_top_subgraph(Gd, min_component_size)
+
+
+def plot_network_graphs(
+    Gu: nx.Graph, Gd: nx.DiGraph, df_cent: pd.DataFrame, comm_data: dict, centralities: dict,
+    output_dir: str = "plots", pos: Optional[dict] = None, pos_dir: Optional[dict] = None,
+    cmap_undirected: str = "tab20", cmap_directed: str = "tab20",
+) -> tuple[Optional[dict], Optional[dict]]:
+    """Genera i grafi standard colorati per Comunità riutilizzando render_network."""
+    deg_cent = centralities["deg_cent"]
+    pagerank = centralities["pagerank"]
     node_to_louvain = comm_data["node_to_louvain"]
-    top_louvain = _select_top_communities(Gu_plot, node_to_louvain, df_processed, top_k, sort_by)
-    Gu_plot.remove_nodes_from([n for n in list(Gu_plot.nodes()) if node_to_louvain.get(n) not in top_louvain])
+    node_to_infomap = comm_data.get("node_to_infomap", {})
 
-    node_to_infomap = comm_data["node_to_infomap"]
-    top_infomap = _select_top_communities(Gd_plot, node_to_infomap, df_processed, top_k, sort_by)
-    Gd_plot.remove_nodes_from([n for n in list(Gd_plot.nodes()) if node_to_infomap.get(n) not in top_infomap])
+    # Rete Indiretta (Louvain)
+    nodes_in_relations = [n for n, d in Gu.degree() if d > 0]
+    subG = Gu.subgraph(nodes_in_relations)
+    if pos is None and nodes_in_relations:
+        pos = nx.spring_layout(subG, k=0.3, iterations=60, seed=42)
 
-    nodes_with_edges = [n for n, d in Gu.degree() if d > 0]
-    pos = nx.spring_layout(Gu.subgraph(nodes_with_edges), k=0.3, iterations=60, seed=42)
+    if nodes_in_relations:
+        louvain_cmap = get_community_color_map(node_to_louvain, cmap_name=cmap_undirected)
+        colors = [louvain_cmap.get(node_to_louvain.get(node, 0), "#bdc3c7") for node in subG.nodes()]
+        sizes = [50 + (deg_cent[node] * 1200) for node in subG.nodes()]
+        top_10 = df_cent.sort_values(by="degree_centrality_undirected", ascending=False).head(10)['user'].tolist()
+        labels = {n: n for n in subG.nodes() if n in top_10}
+        
+        render_network(
+            G=subG, pos=pos, node_colors=colors, node_sizes=sizes, labels=labels,
+            title=f"Undirected Social Network Graph (degree centrality & Louvain partitions)\n(Modularity Q: {comm_data['modularity_score']:.4f})",
+            filename="network_graph.png", output_dir=output_dir
+        )
 
-    nodes_with_edges_dir = [n for n, d in Gd.degree() if d > 0]
-    pos_dir = nx.spring_layout(Gd.subgraph(nodes_with_edges_dir), k=0.3, iterations=60, seed=42)
+    # Rete Diretta (Infomap)
+    nodes_in_relations_dir = [n for n, d in Gd.degree() if d > 0]
+    subG_dir = Gd.subgraph(nodes_in_relations_dir)
+    if pos_dir is None and nodes_in_relations_dir:
+        pos_dir = nx.spring_layout(subG_dir, k=0.3, iterations=60, seed=42)
 
-    plot_network_graphs(
-        Gu_plot, Gd_plot, df_cent, comm_data, centralities,
-        output_dir=output_dir, pos=pos, pos_dir=pos_dir,
-        cmap_undirected=cmap_undirected, cmap_directed=cmap_directed,
-    )
+    if nodes_in_relations_dir:
+        infomap_cmap = get_community_color_map(node_to_infomap, cmap_name=cmap_directed)
+        colors_dir = [infomap_cmap.get(node_to_infomap.get(node, 0), "#bdc3c7") for node in subG_dir.nodes()]
+        sizes_dir = [50 + (pagerank.get(node, 0.0) * 18000) for node in subG_dir.nodes()]
+        top_10_dir = df_cent.sort_values(by="pagerank", ascending=False).head(10)['user'].tolist()
+        labels_dir = {n: n for n in subG_dir.nodes() if n in top_10_dir}
+
+        render_network(
+            G=subG_dir, pos=pos_dir, node_colors=colors_dir, node_sizes=sizes_dir, labels=labels_dir,
+            title=f"Directed Social Network Graph (PageRank prestige & Infomap partitions)\n(Projected Modularity Q: {comm_data.get('infomap_modularity', 0.0):.4f})",
+            filename="network_graph_directed.png", output_dir=output_dir
+        )
+
+    return pos, pos_dir
+
+
+def plot_filtered_network_graph(
+    Gu: nx.Graph, Gd: nx.DiGraph, df_cent: pd.DataFrame, comm_data: dict, centralities: dict, df_processed: pd.DataFrame,
+    min_component_size: int = 10, output_dir: str = "plots/filtered", top_k: int = 5, sort_by: str = "post_volume",
+    cmap_undirected: str = "tab20", cmap_directed: str = "tab20",
+) -> tuple[nx.Graph, nx.DiGraph, dict, dict]:
+    """Sfrutta il nuovo estrattore universale extract_top_subgraph prima di lanciare il plot."""
+    Gu_plot = extract_top_subgraph(Gu, min_component_size, top_k, comm_data["node_to_louvain"], df_processed, sort_by)
+    Gd_plot = extract_top_subgraph(Gd, min_component_size, top_k, comm_data["node_to_infomap"], df_processed, sort_by)
+
+    pos = nx.spring_layout(Gu.subgraph([n for n, d in Gu.degree() if d > 0]), k=0.3, iterations=60, seed=42)
+    pos_dir = nx.spring_layout(Gd.subgraph([n for n, d in Gd.degree() if d > 0]), k=0.3, iterations=60, seed=42)
+
+    plot_network_graphs(Gu_plot, Gd_plot, df_cent, comm_data, centralities, output_dir=output_dir, pos=pos, pos_dir=pos_dir,
+                        cmap_undirected=cmap_undirected, cmap_directed=cmap_directed)
 
     return Gu_plot, Gd_plot, pos, pos_dir
 
 
 def _get_user_dominant_emotion(df_processed: pd.DataFrame, backend: str) -> dict[str, str]:
-    """Return a mapping of author_handle → dominant emotion (mode across all their posts).
+    col = "author_dominant_emotion_nrc" if backend == "nrc" else "author_dominant_emotion_bert"
+    return df_processed.groupby("author_handle")[col].first().to_dict()
 
-    Uses the nrc_dominant_emotion or bert_dominant_emotion column depending on backend.
-    Falls back to "neutral" for users with no data.
-    """
-    col = "nrc_dominant_emotion" if backend == "nrc" else "bert_dominant_emotion"
-    grouped = df_processed.groupby("author_handle")[col].agg(
-        lambda s: s.mode().iloc[0] if not s.mode().empty else "neutral"
-    )
-    return grouped.to_dict()
-
-
-def _add_emotion_legend(ax: plt.Axes) -> None:
-    """Attach a fixed colour legend for the 8 Plutchik emotions + neutral."""
-    patches = [
-        mpatches.Patch(color=color, label=emotion.capitalize())
-        for emotion, color in EMOTION_COLORS.items()
-    ]
-    ax.legend(
-        handles=patches,
-        loc="lower left",
-        fontsize=8,
-        title="Dominant Emotion",
-        title_fontsize=9,
-        framealpha=0.85,
-        ncol=2,
-    )
 
 
 def plot_network_graphs_by_emotion(
-    Gu: nx.Graph,
-    Gd: nx.DiGraph,
-    df_cent: pd.DataFrame,
-    centralities: dict,
-    df_processed: pd.DataFrame,
-    backend: str = "nrc",
-    output_dir: str = "plots",
-    pos: Optional[dict] = None,
-    pos_dir: Optional[dict] = None,
+    Gu: nx.Graph, Gd: nx.DiGraph, df_cent: pd.DataFrame, centralities: dict, df_processed: pd.DataFrame,
+    backend: str = "nrc", output_dir: str = "plots", pos: Optional[dict] = None, pos_dir: Optional[dict] = None,
 ) -> None:
-    """Render undirected and directed network graphs with nodes coloured by dominant emotion.
-
-    This is meant to redraw the *same* graphs produced by plot_network_graphs /
-    plot_filtered_network_graph: pass the identical (Gu, Gd) graph objects and the
-    (pos, pos_dir) layouts those functions returned, and the only difference from the
-    community-coloured figures is the node colour (dominant emotion instead of
-    community). When pos/pos_dir are omitted they fall back to the same spring layout
-    (k=0.3, iterations=60, seed=42) for standalone use.
-
-    Node size still encodes degree centrality (undirected) and PageRank (directed).
-    Only the top-10 most central nodes are labelled.
-    Produces network_graph_emotion_{backend}.png and network_graph_directed_emotion_{backend}.png.
-    """
+    """Iniezione dinamica dei colori emozionali all'interno dell'architettura unificata render_network."""
     deg_cent = centralities["deg_cent"]
     pagerank = centralities["pagerank"]
     user_emotion = _get_user_dominant_emotion(df_processed, backend)
-    backend_label = backend.upper()
+    
+    legend_patches = [mpatches.Patch(color=color, label=emotion.capitalize()) for emotion, color in EMOTION_COLORS.items()]
 
-    nodes_in_relations = [n for n, d in Gu.degree() if d > 0]
-    if not nodes_in_relations:
-        print("Isolated graph / Not enough relationships to plot.")
-        return
+    # Undirected
+    nodes = [n for n, d in Gu.degree() if d > 0]
+    if nodes:
+        subG = Gu.subgraph(nodes)
+        if pos is None: pos = nx.spring_layout(subG, k=0.3, iterations=60, seed=42)
+        colors = [EMOTION_COLORS.get(user_emotion.get(n, "neutral"), EMOTION_COLORS["neutral"]) for n in subG.nodes()]
+        sizes = [50 + (deg_cent[n] * 1200) for n in subG.nodes()]
+        top_10 = df_cent.sort_values(by="degree_centrality_undirected", ascending=False).head(10)['user'].tolist()
+        
+        render_network(subG, pos, colors, sizes, {n: n for n in subG.nodes() if n in top_10},
+                       f"Undirected Social Network Graph — Dominant Emotion ({backend.upper()})\n(node size proportional to degree centrality)",
+                       f"network_graph_emotion_{backend}.png", output_dir, legend_patches, "Dominant Emotion")
 
-    subG = Gu.subgraph(nodes_in_relations)
-    if pos is None:
-        pos = nx.spring_layout(subG, k=0.3, iterations=60, seed=42)
-
-    top_10_nodes = df_cent.sort_values(by="degree_centrality_undirected", ascending=False).head(10)['user'].tolist()
-    labels_to_draw = {node: node for node in subG.nodes() if node in top_10_nodes}
-
-    fig, ax = plt.subplots(figsize=(12, 12))
-    node_colors = [EMOTION_COLORS.get(user_emotion.get(node, "neutral"), EMOTION_COLORS["neutral"]) for node in subG.nodes()]
-    node_sizes = [50 + (deg_cent[node] * 1200) for node in subG.nodes()]
-
-    nx.draw_networkx_edges(subG, pos, ax=ax, alpha=0.15, edge_color="grey")
-    nx.draw_networkx_nodes(subG, pos, ax=ax, node_size=node_sizes, node_color=node_colors, alpha=0.9)
-    nx.draw_networkx_labels(subG, pos, ax=ax, labels=labels_to_draw, font_size=9, font_weight="bold", font_color="#1e272c")
-    ax.set_title(f"Undirected Social Network Graph — Dominant Emotion ({backend_label})\n(node size proportional to degree centrality)", pad=15)
-    ax.axis("off")
-    _add_emotion_legend(ax)
-    plt.tight_layout()
-    save_plot_copies(f"network_graph_emotion_{backend}.png", output_dir=output_dir)
-    plt.close(fig)
-
-    nodes_in_relations_dir = [n for n, d in Gd.degree() if d > 0]
-    fig2, ax2 = plt.subplots(figsize=(12, 12))
-    if nodes_in_relations_dir:
-        subG_dir = Gd.subgraph(nodes_in_relations_dir)
-        if pos_dir is None:
-            pos_dir = nx.spring_layout(subG_dir, k=0.3, iterations=60, seed=42)
-
-        node_colors_dir = [EMOTION_COLORS.get(user_emotion.get(node, "neutral"), EMOTION_COLORS["neutral"]) for node in subG_dir.nodes()]
-        node_sizes_dir = [50 + (pagerank.get(node, 0.0) * 18000) for node in subG_dir.nodes()]
-
-        nx.draw_networkx_edges(subG_dir, pos_dir, ax=ax2, alpha=0.2, edge_color="grey",
-                               arrows=True, arrowstyle='-|>', arrowsize=12,
-                               connectionstyle="arc3,rad=0.1")
-        nx.draw_networkx_nodes(subG_dir, pos_dir, ax=ax2, node_size=node_sizes_dir, node_color=node_colors_dir, alpha=0.9)
-
-        top_10_nodes_dir = df_cent.sort_values(by="pagerank", ascending=False).head(10)['user'].tolist()
-        labels_to_draw_dir = {node: node for node in subG_dir.nodes() if node in top_10_nodes_dir}
-        nx.draw_networkx_labels(subG_dir, pos_dir, ax=ax2, labels=labels_to_draw_dir, font_size=9, font_weight="bold", font_color="#1e272c")
-    else:
-        ax2.text(0.5, 0.5, "Isolated graph / Not enough relationships", ha='center', va='center')
-
-    ax2.set_title(f"Directed Social Network Graph — Dominant Emotion ({backend_label})\n(node size proportional to PageRank prestige)", pad=15)
-    ax2.axis("off")
-    _add_emotion_legend(ax2)
-    plt.tight_layout()
-    save_plot_copies(f"network_graph_directed_emotion_{backend}.png", output_dir=output_dir)
-    plt.close(fig2)
+    # Directed
+    nodes_dir = [n for n, d in Gd.degree() if d > 0]
+    if nodes_dir:
+        subG_dir = Gd.subgraph(nodes_dir)
+        if pos_dir is None: pos_dir = nx.spring_layout(subG_dir, k=0.3, iterations=60, seed=42)
+        colors_dir = [EMOTION_COLORS.get(user_emotion.get(n, "neutral"), EMOTION_COLORS["neutral"]) for n in subG_dir.nodes()]
+        sizes_dir = [50 + (pagerank.get(n, 0.0) * 18000) for n in subG_dir.nodes()]
+        top_10_dir = df_cent.sort_values(by="pagerank", ascending=False).head(10)['user'].tolist()
+        
+        render_network(subG_dir, pos_dir, colors_dir, sizes_dir, {n: n for n in subG_dir.nodes() if n in top_10_dir},
+                       f"Directed Social Network Graph — Dominant Emotion ({backend.upper()})\n(node size proportional to PageRank prestige)",
+                       f"network_graph_directed_emotion_{backend}.png", output_dir, legend_patches, "Dominant Emotion")
 
 
 def plot_network_graphs_by_fanbase(
-    Gu: nx.Graph,
-    Gd: nx.DiGraph,
-    df_cent: pd.DataFrame,
-    centralities: dict,
-    output_dir: str = "plots",
-    pos: Optional[dict] = None,
-    pos_dir: Optional[dict] = None,
+    Gu: nx.Graph, Gd: nx.DiGraph, df_cent: pd.DataFrame, centralities: dict,
+    output_dir: str = "plots", pos: Optional[dict] = None, pos_dir: Optional[dict] = None,
 ) -> None:
-    """Render undirected and directed network graphs with nodes coloured by fanbase leaning.
-
-    Reuses the precomputed layouts pos and pos_dir to keep node positions stable.
-    Sinner fanbase color: orange (#f39c12)
-    Alcaraz fanbase color: blue (#00b4d8)
-    Neutral fanbase color: gray (#cbd5e0)
-    """
+    """Disegna la struttura di rete mappando i colori in base alla stance (Sinner, Alcaraz, Neutral)."""
     deg_cent = centralities["deg_cent"]
     pagerank = centralities["pagerank"]
-    
-    FANBASE_COLORS = {
-        'sinner': '#f39c12',
-        'alcaraz': '#00b4d8',
-        'neutral': '#cbd5e0'
-    }
-
-    # Map users to stance leaning using df_cent
+    FANBASE_COLORS = {'sinner': '#f39c12', 'alcaraz': '#00b4d8', 'neutral': '#cbd5e0'}
     stance_map = dict(zip(df_cent['user'], df_cent['stance_leaning']))
     
-    def get_color(node):
-        lean = stance_map.get(node, 'neutral')
-        if pd.isna(lean) or not lean:
-            lean = 'neutral'
-        return FANBASE_COLORS.get(lean, FANBASE_COLORS['neutral'])
+    get_color = lambda n: FANBASE_COLORS.get(stance_map.get(n, 'neutral') if pd.notna(stance_map.get(n, 'neutral')) else 'neutral', FANBASE_COLORS['neutral'])
+    legend_patches = [mpatches.Patch(color='#f39c12', label='Sinner Fanbase'), mpatches.Patch(color='#00b4d8', label='Alcaraz Fanbase'), mpatches.Patch(color='#cbd5e0', label='Neutral')]
 
-    nodes_in_relations = [n for n, d in Gu.degree() if d > 0]
-    if not nodes_in_relations:
-        print("Isolated graph / Not enough relationships to plot fanbase network.")
-        return
-
-    subG = Gu.subgraph(nodes_in_relations)
-    if pos is None:
-        pos = nx.spring_layout(subG, k=0.3, iterations=60, seed=42)
-
-    top_10_nodes = df_cent.sort_values(by="degree_centrality_undirected", ascending=False).head(10)['user'].tolist()
-    labels_to_draw = {node: node for node in subG.nodes() if node in top_10_nodes}
-
-    fig, ax = plt.subplots(figsize=(12, 12))
-    
-    node_colors = [get_color(node) for node in subG.nodes()]
-    node_sizes = [50 + (deg_cent[node] * 1200) for node in subG.nodes()]
-
-    nx.draw_networkx_edges(subG, pos, ax=ax, alpha=0.15, edge_color="grey")
-    nx.draw_networkx_nodes(subG, pos, ax=ax, node_size=node_sizes, node_color=node_colors, alpha=0.9, edgecolors='black', linewidths=0.5)
-    nx.draw_networkx_labels(subG, pos, ax=ax, labels=labels_to_draw, font_size=9, font_weight="bold", font_color="#1e272c")
-    
-    patches = [
-        mpatches.Patch(color='#f39c12', label='Sinner Fanbase'),
-        mpatches.Patch(color='#00b4d8', label='Alcaraz Fanbase'),
-        mpatches.Patch(color='#cbd5e0', label='Neutral')
-    ]
-    ax.legend(handles=patches, loc="lower left", fontsize=10, title="Fanbase Leaning", title_fontsize=11, framealpha=0.85)
-
-    ax.set_title("Undirected Social Network Graph — Fanbase Leaning\n(node size proportional to degree centrality)", pad=15)
-    ax.axis("off")
-    plt.tight_layout()
-    save_plot_copies("network_graph_fanbase.png", output_dir=output_dir)
-    plt.close(fig)
-
-    nodes_in_relations_dir = [n for n, d in Gd.degree() if d > 0]
-    fig2, ax2 = plt.subplots(figsize=(12, 12))
-    if nodes_in_relations_dir:
-        subG_dir = Gd.subgraph(nodes_in_relations_dir)
-        if pos_dir is None:
-            pos_dir = nx.spring_layout(subG_dir, k=0.3, iterations=60, seed=42)
-
-        node_colors_dir = [get_color(node) for node in subG_dir.nodes()]
-        node_sizes_dir = [50 + (pagerank.get(node, 0.0) * 18000) for node in subG_dir.nodes()]
-
-        nx.draw_networkx_edges(subG_dir, pos_dir, ax=ax2, alpha=0.2, edge_color="grey",
-                               arrows=True, arrowstyle='-|>', arrowsize=12,
-                               connectionstyle="arc3,rad=0.1")
-        nx.draw_networkx_nodes(subG_dir, pos_dir, ax=ax2, node_size=node_sizes_dir, node_color=node_colors_dir, alpha=0.9, edgecolors='black', linewidths=0.5)
-
-        top_10_nodes_dir = df_cent.sort_values(by="pagerank", ascending=False).head(10)['user'].tolist()
-        labels_to_draw_dir = {node: node for node in subG_dir.nodes() if node in top_10_nodes_dir}
-        nx.draw_networkx_labels(subG_dir, pos_dir, ax=ax2, labels=labels_to_draw_dir, font_size=9, font_weight="bold", font_color="#1e272c")
-    else:
-        ax2.text(0.5, 0.5, "Isolated graph / Not enough relationships", ha='center', va='center')
-
-    ax2.legend(handles=patches, loc="lower left", fontsize=10, title="Fanbase Leaning", title_fontsize=11, framealpha=0.85)
-    ax2.set_title("Directed Social Network Graph — Fanbase Leaning\n(node size proportional to PageRank prestige)", pad=15)
-    ax2.axis("off")
-    plt.tight_layout()
-    save_plot_copies("network_graph_directed_fanbase.png", output_dir=output_dir)
-    plt.close(fig2)
-
-
-def plot_network_graphs(
-    Gu: nx.Graph,
-    Gd: nx.DiGraph,
-    df_cent: pd.DataFrame,
-    comm_data: dict,
-    centralities: dict,
-    output_dir: str = "plots",
-    pos: Optional[dict] = None,
-    pos_dir: Optional[dict] = None,
-    cmap_undirected: str = "tab20",
-    cmap_directed: str = "tab20",
-) -> tuple[Optional[dict], Optional[dict]]:
-    """Render the undirected (Louvain/degree) and directed (Infomap/PageRank) network figures.
-
-    Node colour encodes community, node size encodes centrality, and only the top-10
-    most central nodes are labelled. Precomputed layouts (pos/pos_dir) are reused as-is.
-
-    Returns the (pos, pos_dir) spring layouts actually used so callers (e.g. the
-    emotion-coloured variant) can redraw the *identical* graph with different colours.
-    """
-    deg_cent = centralities["deg_cent"]
-    pagerank = centralities["pagerank"]
-    node_to_community = comm_data["node_to_louvain"]
-    modularity_score = comm_data["modularity_score"]
-
-    nodes_in_relations = [n for n, d in Gu.degree() if d > 0]
-    if not nodes_in_relations:
-        print("Isolated graph / Not enough relationships to plot.")
-        return pos, pos_dir
-
-    subG = Gu.subgraph(nodes_in_relations)
-    if pos is None:
-        pos = nx.spring_layout(subG, k=0.3, iterations=60, seed=42)
+    # Undirected
+    nodes = [n for n, d in Gu.degree() if d > 0]
+    if nodes:
+        subG = Gu.subgraph(nodes)
+        if pos is None: pos = nx.spring_layout(subG, k=0.3, iterations=60, seed=42)
+        top_10 = df_cent.sort_values(by="degree_centrality_undirected", ascending=False).head(10)['user'].tolist()
         
-    top_10_nodes = df_cent.sort_values(by="degree_centrality_undirected", ascending=False).head(10)['user'].tolist()
-    labels_to_draw = {node: node for node in subG.nodes() if node in top_10_nodes}
+        render_network(subG, pos, [get_color(n) for n in subG.nodes()], [50 + (deg_cent[n] * 1200) for n in subG.nodes()],
+                       {n: n for n in subG.nodes() if n in top_10}, "Undirected Social Network Graph — Fanbase Leaning\n(node size proportional to degree centrality)",
+                       "network_graph_fanbase.png", output_dir, legend_patches, "Fanbase Leaning", legend_ncol=1)
 
-    plt.figure(figsize=(12, 12))
-    louvain_color_map = get_community_color_map(node_to_community, cmap_name=cmap_undirected)
-    node_colors = [louvain_color_map.get(node_to_community.get(node, 0), "#bdc3c7") for node in subG.nodes()]
-    node_sizes = [50 + (deg_cent[node] * 1200) for node in subG.nodes()]
-
-    nx.draw_networkx_edges(subG, pos, alpha=0.15, edge_color="grey")
-    nx.draw_networkx_nodes(subG, pos, node_size=node_sizes, node_color=node_colors, alpha=0.9)
-    nx.draw_networkx_labels(subG, pos, labels=labels_to_draw, font_size=9, font_weight="bold", font_color="#1e272c")
-    plt.title(f"Undirected Social Network Graph (degree centrality & Louvain partitions)\n(Modularity Q: {modularity_score:.4f})", pad=15)
-    plt.axis("off")
-    plt.tight_layout()
-    save_plot_copies("network_graph.png", output_dir=output_dir)
-    plt.close()
-
-    plt.figure(figsize=(12, 12))
-    nodes_in_relations_dir = [n for n, d in Gd.degree() if d > 0]
-    infomap_modularity = comm_data.get("infomap_modularity", 0.0)
-    if nodes_in_relations_dir:
-        subG_dir = Gd.subgraph(nodes_in_relations_dir)
-        if pos_dir is None:
-            pos_dir = nx.spring_layout(subG_dir, k=0.3, iterations=60, seed=42)
-
-        node_to_infomap = comm_data.get("node_to_infomap", {})
-        infomap_color_map = get_community_color_map(node_to_infomap, cmap_name=cmap_directed)
-        node_colors_dir = [infomap_color_map.get(node_to_infomap.get(node, 0), "#bdc3c7") for node in subG_dir.nodes()]
-        node_sizes_dir = [50 + (pagerank.get(node, 0.0) * 18000) for node in subG_dir.nodes()]
-
-        nx.draw_networkx_edges(subG_dir, pos_dir, alpha=0.2, edge_color="grey",
-                               arrows=True, arrowstyle='-|>', arrowsize=12,
-                               connectionstyle="arc3,rad=0.1")
-        nx.draw_networkx_nodes(subG_dir, pos_dir, node_size=node_sizes_dir, node_color=node_colors_dir, alpha=0.9)
-
-        top_10_nodes_dir = df_cent.sort_values(by="pagerank", ascending=False).head(10)['user'].tolist()
-        labels_to_draw_dir = {node: node for node in subG_dir.nodes() if node in top_10_nodes_dir}
-        nx.draw_networkx_labels(subG_dir, pos_dir, labels=labels_to_draw_dir, font_size=9, font_weight="bold", font_color="#1e272c")
-    else:
-        plt.text(0.5, 0.5, "Isolated graph / Not enough relationships", ha='center', va='center')
-
-    plt.title(f"Directed Social Network Graph (PageRank prestige & Infomap partitions)\n(Projected Modularity Q: {infomap_modularity:.4f})", pad=15)
-    plt.axis("off")
-    plt.tight_layout()
-    save_plot_copies("network_graph_directed.png", output_dir=output_dir)
-    plt.close()
-
-    return pos, pos_dir
+    # Directed
+    nodes_dir = [n for n, d in Gd.degree() if d > 0]
+    if nodes_dir:
+        subG_dir = Gd.subgraph(nodes_dir)
+        if pos_dir is None: pos_dir = nx.spring_layout(subG_dir, k=0.3, iterations=60, seed=42)
+        top_10_dir = df_cent.sort_values(by="pagerank", ascending=False).head(10)['user'].tolist()
+        
+        render_network(subG_dir, pos_dir, [get_color(n) for n in subG_dir.nodes()], [50 + (pagerank.get(n, 0.0) * 18000) for n in subG_dir.nodes()],
+                       {n: n for n in subG_dir.nodes() if n in top_10_dir}, "Directed Social Network Graph — Fanbase Leaning\n(node size proportional to PageRank prestige)",
+                       "network_graph_directed_fanbase.png", output_dir, legend_patches, "Fanbase Leaning", legend_ncol=1)

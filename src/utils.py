@@ -1,7 +1,21 @@
 import os
 import ast
 import json
-from typing import Any
+from typing import Any, Union, Optional
+
+# Set custom Hugging Face cache directory to avoid permissions/lock issues in user home directory
+workspace_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.environ["HF_HOME"] = os.path.abspath(os.path.join(workspace_path, ".huggingface_cache"))
+
+import torch
+from transformers import pipeline
+
+SINNER_URI = "http://dbpedia.org/resource/Jannik_Sinner"
+ALCARAZ_URI = "http://dbpedia.org/resource/Carlos_Alcaraz"
+
+SINNER_KEYWORDS = {"sinner", "jannik"}
+ALCARAZ_KEYWORDS = {"alcaraz", "carlos", "carlitos"}
+
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -82,3 +96,107 @@ def save_plot_copies(filename: str, output_dir: str = "plots") -> None:
     report_dir = output_dir.replace("plots", "report", 1)
     os.makedirs(report_dir, exist_ok=True)
     plt.savefig(os.path.join(report_dir, filename), dpi=300, bbox_inches='tight')
+
+
+def render_flat_chart(
+    fig,
+    filename: str,
+    output_dir: str = "plots",
+    title: str = None,
+    xlabel: str = None,
+    ylabel: str = None,
+    legend_title: str = None,
+    legend_ncol: int = None,
+    tight_layout: bool = True,
+    title_weight: str = "normal",
+    title_pad: int = 15,
+) -> None:
+    """Unified helper for flat matplotlib/seaborn plots to apply styling, labels, layout, save, and close."""
+    if title:
+        plt.title(title, fontsize=14, pad=title_pad, weight=title_weight)
+    if xlabel:
+        plt.xlabel(xlabel, fontsize=11, labelpad=10)
+    if ylabel:
+        plt.ylabel(ylabel, fontsize=11, labelpad=10)
+    if legend_title:
+        plt.legend(title=legend_title, ncol=legend_ncol or 1)
+    if tight_layout:
+        plt.tight_layout()
+    save_plot_copies(filename, output_dir=output_dir)
+    plt.close(fig)
+
+
+_sentiment_clf_roberta = None
+
+
+def get_sentiment_clf_roberta():
+    """Lazily load and cache CardiffNLP RoBERTa sentiment analysis pipeline."""
+    global _sentiment_clf_roberta
+    if _sentiment_clf_roberta is None:
+        device = 0 if torch.cuda.is_available() else -1
+        print(f"[NLP] Initializing CardiffNLP RoBERTa sentiment model on device={device}...")
+        _sentiment_clf_roberta = pipeline(
+            "sentiment-analysis",
+            model="cardiffnlp/twitter-roberta-base-sentiment-latest",
+            device=device,
+            top_k=None
+        )
+    return _sentiment_clf_roberta
+
+
+def score_roberta_sentiment(text_or_list: Union[str, list[str]], batch_size: int = 128) -> list[dict]:
+    """Compute CardiffNLP sentiment labels and compound scores (P(positive) - P(negative)) for text inputs."""
+    clf = get_sentiment_clf_roberta()
+    if isinstance(text_or_list, str):
+        inputs = [text_or_list]
+    else:
+        inputs = text_or_list
+
+    def input_generator():
+        for t in inputs:
+            yield t if (isinstance(t, str) and t.strip() != "") else " "
+
+    results = clf(input_generator(), batch_size=batch_size, truncation=True, max_length=512)
+    outputs = []
+    for res in results:
+        scores_dict = {d['label']: d['score'] for d in res}
+        if 'LABEL_0' in scores_dict:
+            p_neg = scores_dict.get('LABEL_0', 0.0)
+            p_pos = scores_dict.get('LABEL_2', 0.0)
+            max_label = max(scores_dict, key=scores_dict.get)
+            if max_label == 'LABEL_0':
+                cat = 'negative'
+            elif max_label == 'LABEL_2':
+                cat = 'positive'
+            else:
+                cat = 'neutral'
+        else:
+            p_neg = scores_dict.get('negative', 0.0)
+            p_pos = scores_dict.get('positive', 0.0)
+            cat = max(scores_dict, key=scores_dict.get)
+        comp = p_pos - p_neg
+        outputs.append({'category': cat, 'compound': comp})
+    return outputs
+
+
+def detect_player_mentions(text: Optional[str], linked_entities: list) -> tuple[bool, bool]:
+    """Detect Sinner and Alcaraz mentions from linked DBpedia URIs and raw text keywords."""
+    uris = set()
+    if isinstance(linked_entities, list):
+        for ent in linked_entities:
+            if isinstance(ent, dict):
+                uris.add(ent.get('uri', ''))
+            elif isinstance(ent, (tuple, list)) and len(ent) > 0:
+                uris.add(ent[0])
+    
+    is_sinner = SINNER_URI in uris
+    is_alcaraz = ALCARAZ_URI in uris
+    
+    if not is_sinner and not is_alcaraz:
+        text_lower = str(text or '').lower()
+        is_sinner = any(kw in text_lower for kw in SINNER_KEYWORDS)
+        is_alcaraz = any(kw in text_lower for kw in ALCARAZ_KEYWORDS)
+        
+    return is_sinner, is_alcaraz
+
+

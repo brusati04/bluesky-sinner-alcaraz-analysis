@@ -1,10 +1,6 @@
 import os
 from typing import Optional
 
-# Set custom Hugging Face cache directory to avoid permissions/lock issues in user home directory
-workspace_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-os.environ["HF_HOME"] = os.path.abspath(os.path.join(workspace_path, ".huggingface_cache"))
-
 import pandas as pd
 import numpy as np
 import torch
@@ -14,7 +10,16 @@ from tqdm import tqdm
 from nrclex import NRCLex
 from transformers import pipeline
 
-from utils import save_plot_copies
+from utils import (
+    save_plot_copies,
+    render_flat_chart,
+    detect_player_mentions,
+    score_roberta_sentiment,
+    SINNER_URI,
+    ALCARAZ_URI,
+    SINNER_KEYWORDS,
+    ALCARAZ_KEYWORDS,
+)
 from preprocessing import clean_text, clean_text_bert, preprocess
 from social_network_analysis import get_community_color_map
 
@@ -49,11 +54,7 @@ W_SENTIMENT = 0.50
 W_EMOTION = 0.35
 W_FREQUENCY = 0.15
 
-SINNER_URI = "http://dbpedia.org/resource/Jannik_Sinner"
-ALCARAZ_URI = "http://dbpedia.org/resource/Carlos_Alcaraz"
 
-SINNER_KEYWORDS = {"sinner", "jannik"}
-ALCARAZ_KEYWORDS = {"alcaraz", "carlos", "carlitos"}
 
 # ─────────────────────────────────────────────────────────────────────────────
 # NLP, ENTITY MATCHING & EMOTION SCORING
@@ -197,21 +198,11 @@ def add_emotion_columns(df: pd.DataFrame, text_col: str = 'cleaned_text', backen
 
 
 def derive_player_sentiment_scores(df: pd.DataFrame) -> dict[str, list[float]]:
-    """Bucket compound scores per player (Sinner / Alcaraz).
-
-    A post counts toward a player when that player's DBpedia entity was linked
-    or their name keywords appear in the raw post text.
-    """
-    sinner_scores: list[float] = []
-    alcaraz_scores: list[float] = []
-    for linked_ents, comp, text in zip(df['linked_entities'], df['sentiment_compound'], df['text']):
-        uris = {ent['uri'] for ent in linked_ents if isinstance(ent, dict)}
-        text_lower = str(text).lower()
-        if SINNER_URI in uris or any(k in text_lower for k in SINNER_KEYWORDS):
-            sinner_scores.append(comp)
-        if ALCARAZ_URI in uris or any(k in text_lower for k in ALCARAZ_KEYWORDS):
-            alcaraz_scores.append(comp)
+    """Bucket compound scores per player (Sinner / Alcaraz) using precomputed flags."""
+    sinner_scores = df.loc[df['is_sinner'], 'sentiment_compound'].tolist()
+    alcaraz_scores = df.loc[df['is_alcaraz'], 'sentiment_compound'].tolist()
     return {"sinner_scores": sinner_scores, "alcaraz_scores": alcaraz_scores}
+
 
 
 def run_nlp_enrichment(df: pd.DataFrame, output_filepath: str = "data/sinner_alcaraz_processed.csv", emotion_backend: str = "both") -> dict:
@@ -241,74 +232,19 @@ def run_nlp_enrichment(df: pd.DataFrame, output_filepath: str = "data/sinner_alc
     print("[NLP] Step 1/6 completed.")
 
     print("[NLP] Step 2/6: Scoring RoBERTa sentiments on GPU...")
-    # Initialize pipeline
-    device = 0 if torch.cuda.is_available() else -1
-    print(f"[NLP] Initializing CardiffNLP RoBERTa model on device={device}...")
-    classifier = pipeline(
-        "sentiment-analysis",
-        model="cardiffnlp/twitter-roberta-base-sentiment-latest",
-        device=device,
-        top_k=None
-    )
-
-    # Clean the text with clean_text_bert ONLY for BERT/RoBERTa input
     bert_inputs = df['text'].apply(clean_text_bert).tolist()
-    batch_size = 128
-    sentiment_categories = []
-    sentiment_compounds = []
-
-    print(f"[NLP] Running GPU parallelized inference with batch_size={batch_size}...")
-    
-    # Generator to pass to pipeline for parallelized dataloading and batching on GPU
-    def input_generator():
-        for t in bert_inputs:
-            yield t if (isinstance(t, str) and t.strip() != "") else " "
-
-    # Running classifier with generator yields results dynamically, which is parallelized under the hood
-    results = classifier(input_generator(), batch_size=batch_size, truncation=True, max_length=512)
-
-    for res in tqdm(results, total=len(bert_inputs), desc="RoBERTa Sentiment"):
-        scores_dict = {d['label']: d['score'] for d in res}
-        
-        # Label mappings (handles standard string labels or LABEL_X identifiers)
-        if 'LABEL_0' in scores_dict:
-            p_neg = scores_dict.get('LABEL_0', 0.0)
-            p_neu = scores_dict.get('LABEL_1', 0.0)
-            p_pos = scores_dict.get('LABEL_2', 0.0)
-            
-            max_label = max(scores_dict, key=scores_dict.get)
-            if max_label == 'LABEL_0':
-                cat = 'negative'
-            elif max_label == 'LABEL_2':
-                cat = 'positive'
-            else:
-                cat = 'neutral'
-        else:
-            p_neg = scores_dict.get('negative', 0.0)
-            p_neu = scores_dict.get('neutral', 0.0)
-            p_pos = scores_dict.get('positive', 0.0)
-            
-            cat = max(scores_dict, key=scores_dict.get)
-            
-        # Compound score = P(positive) - P(negative)
-        comp = p_pos - p_neg
-        
-        sentiment_categories.append(cat)
-        sentiment_compounds.append(comp)
-
-    df['sentiment_category'] = sentiment_categories
-    df['sentiment_compound'] = sentiment_compounds
+    sentiment_outputs = score_roberta_sentiment(bert_inputs, batch_size=128)
+    df['sentiment_category'] = [item['category'] for item in sentiment_outputs]
+    df['sentiment_compound'] = [item['compound'] for item in sentiment_outputs]
     print("[NLP] Step 2/6 completed.")
 
     if emotion_backend == "nrc":
         print("[NLP] Step 3/6: Running NRC Emotion Lexicon analysis...")
         df = add_emotion_columns(df, text_col='cleaned_text', backend='nrc')
         print("[NLP] Step 3/6 completed.")
-        # bert_emotion_* columns will be absent — that is expected.
     elif emotion_backend == "bert":
         print("[NLP] Step 3/6: Running GoEmotions BERT emotion analysis...")
         df = add_emotion_columns(df, text_col='cleaned_text', backend='bert')
-        # Alias bert_ prefix columns from the generic emotion_* ones:
         for e in NRC_EMOTIONS:
             df[f'bert_emotion_{e}'] = df[f'emotion_{e}']
         df['bert_dominant_emotion'] = df['dominant_emotion']
@@ -336,6 +272,16 @@ def run_nlp_enrichment(df: pd.DataFrame, output_filepath: str = "data/sinner_alc
     df['linked_entities'] = df['cleaned_text'].apply(link_entities_dbpedia)
     print("[NLP] Step 6/6 completed.")
 
+    # Record player flags globally
+    is_sinner_list = []
+    is_alcaraz_list = []
+    for _, row in df.iterrows():
+        is_s, is_a = detect_player_mentions(row['cleaned_text'], row['linked_entities'])
+        is_sinner_list.append(is_s)
+        is_alcaraz_list.append(is_a)
+    df['is_sinner'] = is_sinner_list
+    df['is_alcaraz'] = is_alcaraz_list
+
     scores = derive_player_sentiment_scores(df)
 
     df.to_csv(output_filepath, index=False)
@@ -347,33 +293,24 @@ def run_nlp_enrichment(df: pd.DataFrame, output_filepath: str = "data/sinner_alc
 # PLOTS
 # ─────────────────────────────────────────────────────────────────────────────
 
-def plot_community_emotion_profiles(
+def _prepare_community_emotion_data(
     df: pd.DataFrame,
     Gu,
     node_to_community: dict,
-    output_dir: str = "plots",
-    title_suffix: str = "",
-    top_k: int = 5,
-    sort_by: str = "post_volume",
-    cmap_name: str = "tab20",
-    backend: str = "nrc",
-) -> None:
-    """Plot average emotion profiles for the top-k communities of the filtered graph Gu.
-
-    Communities are selected either by post volume or by node count (sort_by).
-    The ``backend`` chooses which emotion column family to chart:
-      - "nrc"  : the generic `emotion_*` columns (subtitle "NRC Emotion Lexicon").
-      - "bert" : the `bert_emotion_*` columns (subtitle "GoEmotions (BERT)").
-    The output filename is suffixed with the backend name.
-    """
+    top_k: int,
+    sort_by: str,
+    backend: str,
+    cmap_name: str,
+) -> tuple[pd.DataFrame, dict[str, str]]:
+    """Filter posts by top communities and average their emotion scores."""
     author_community = {}
     for handle in df['author_handle']:
         if handle in node_to_community and handle in Gu.nodes():
             author_community[handle] = node_to_community[handle]
 
-    df = df.copy()
-    df['community_id'] = df['author_handle'].map(author_community)
-    df_with_comm = df.dropna(subset=['community_id']).copy()
+    df_copy = df.copy()
+    df_copy['community_id'] = df_copy['author_handle'].map(author_community)
+    df_with_comm = df_copy.dropna(subset=['community_id']).copy()
 
     if sort_by == "post_volume":
         top_comms = df_with_comm['community_id'].value_counts().head(top_k).index.tolist()
@@ -404,17 +341,37 @@ def plot_community_emotion_profiles(
             records.append({"Community": label, "Emotion": col.replace(col_prefix, ''), "Score": avg_scores[col]})
 
     df_plot = pd.DataFrame(records)
+    return df_plot, custom_palette
+
+
+def plot_community_emotion_profiles(
+    df: pd.DataFrame,
+    Gu,
+    node_to_community: dict,
+    output_dir: str = "plots",
+    title_suffix: str = "",
+    top_k: int = 5,
+    sort_by: str = "post_volume",
+    cmap_name: str = "tab20",
+    backend: str = "nrc",
+) -> None:
+    """Plot average emotion profiles for the top-k communities of the filtered graph Gu.
+
+    Communities are selected either by post volume or by node count (sort_by).
+    The ``backend`` chooses which emotion column family to chart:
+      - "nrc"  : the generic `emotion_*` columns (subtitle "NRC Emotion Lexicon").
+      - "bert" : the `bert_emotion_*` columns (subtitle "GoEmotions (BERT)").
+    The output filename is suffixed with the backend name.
+    """
+    df_plot, custom_palette = _prepare_community_emotion_data(
+        df, Gu, node_to_community, top_k, sort_by, backend, cmap_name
+    )
     if df_plot.empty:
         return
 
     subtitle = "GoEmotions (BERT)" if backend == "bert" else "NRC Emotion Lexicon"
-    plt.figure(figsize=(12, 6))
+    fig = plt.figure(figsize=(12, 6))
     sns.barplot(data=df_plot, x="Emotion", y="Score", hue="Community", palette=custom_palette)
-    plt.title(f"Average Emotion Profiles per Community{title_suffix}\n({subtitle})", fontsize=14, pad=15)
-    plt.xlabel("Emotion Category")
-    plt.ylabel("Mean Normalized Score")
-    plt.legend(title="Community")
-    plt.tight_layout()
 
     # Clean the title_suffix to isolate the algorithm name (Louvain / Infomap)
     if "Louvain" in title_suffix:
@@ -427,20 +384,21 @@ def plot_community_emotion_profiles(
             algo = algo[1:]
 
     filename = f"community_emotion_{algo}_{backend}.png"
-    save_plot_copies(filename, output_dir=output_dir)
-    plt.close()
+    render_flat_chart(
+        fig=fig,
+        filename=filename,
+        output_dir=output_dir,
+        title=f"Average Emotion Profiles per Community{title_suffix}\n({subtitle})",
+        xlabel="Emotion Category",
+        ylabel="Mean Normalized Score",
+        legend_title="Community",
+    )
 
 
-def plot_emotion_backend_comparison(df: pd.DataFrame, output_dir: str = "plots") -> None:
-    """Plot a grouped bar chart comparing dominant-emotion distributions of both backends.
-
-    Requires the `nrc_dominant_emotion` and `bert_dominant_emotion` columns produced
-    by ``run_nlp_enrichment(..., emotion_backend='both')``; if either is missing the
-    function prints a warning and returns without plotting.
-    """
+def _prepare_emotion_backend_comparison_data(df: pd.DataFrame) -> Optional[pd.DataFrame]:
+    """Prepare distribution data comparing dominant-emotion distributions of both backends."""
     if 'nrc_dominant_emotion' not in df.columns or 'bert_dominant_emotion' not in df.columns:
-        print("Warning: 'nrc_dominant_emotion'/'bert_dominant_emotion' columns not found. Skipping plot.")
-        return
+        return None
 
     emotion_index = NRC_EMOTIONS + ["neutral"]
     nrc_dist = df['nrc_dominant_emotion'].value_counts(normalize=True).reindex(emotion_index, fill_value=0.0)
@@ -450,30 +408,51 @@ def plot_emotion_backend_comparison(df: pd.DataFrame, output_dir: str = "plots")
     for emotion in emotion_index:
         records.append({"Emotion": emotion, "Share of posts": float(nrc_dist[emotion]), "Backend": "NRC"})
         records.append({"Emotion": emotion, "Share of posts": float(bert_dist[emotion]), "Backend": "BERT"})
-    df_plot = pd.DataFrame(records)
+    return pd.DataFrame(records)
 
-    plt.figure(figsize=(12, 6))
+
+def plot_emotion_backend_comparison(df: pd.DataFrame, output_dir: str = "plots") -> None:
+    """Plot a grouped bar chart comparing dominant-emotion distributions of both backends.
+
+    Requires the `nrc_dominant_emotion` and `bert_dominant_emotion` columns produced
+    by ``run_nlp_enrichment(..., emotion_backend='both')``; if either is missing the
+    function prints a warning and returns without plotting.
+    """
+    df_plot = _prepare_emotion_backend_comparison_data(df)
+    if df_plot is None:
+        print("Warning: 'nrc_dominant_emotion'/'bert_dominant_emotion' columns not found. Skipping plot.")
+        return
+
+    fig = plt.figure(figsize=(12, 6))
     sns.barplot(data=df_plot, x="Emotion", y="Share of posts", hue="Backend")
-    plt.title("Dominant Emotion Distribution: NRC vs GoEmotions (BERT)", fontsize=14, pad=15)
-    plt.xlabel("Emotion Category")
-    plt.ylabel("Share of posts")
-    plt.legend(title="Backend")
-    plt.tight_layout()
+    
+    render_flat_chart(
+        fig=fig,
+        filename="emotion_backend_comparison.png",
+        output_dir=output_dir,
+        title="Dominant Emotion Distribution: NRC vs GoEmotions (BERT)",
+        xlabel="Emotion Category",
+        ylabel="Share of posts",
+        legend_title="Backend",
+    )
 
-    save_plot_copies("emotion_backend_comparison.png", output_dir=output_dir)
-    plt.close()
+
+def _prepare_sentiment_distribution_data(df: pd.DataFrame) -> Optional[tuple[list, list]]:
+    """Extract sentiment category categories and sizes."""
+    if 'sentiment_category' not in df.columns:
+        return None
+    counts = df['sentiment_category'].value_counts()
+    return counts.index.tolist(), counts.values.tolist()
 
 
 def plot_sentiment_distribution(df: pd.DataFrame, output_dir: str = "plots") -> None:
     """Plot a donut chart showing the overall distribution of sentiment categories."""
-    if 'sentiment_category' not in df.columns:
+    data = _prepare_sentiment_distribution_data(df)
+    if data is None:
         print("Warning: 'sentiment_category' column not found in DataFrame. Skipping plot.")
         return
 
-    counts = df['sentiment_category'].value_counts()
-    categories = counts.index.tolist()
-    sizes = counts.values.tolist()
-
+    categories, sizes = data
     # Color palette matching emerald green (pos), slate gray (neu), rose red (neg)
     colors_map = {
         'positive': '#2ec4b6',
@@ -482,7 +461,7 @@ def plot_sentiment_distribution(df: pd.DataFrame, output_dir: str = "plots") -> 
     }
     colors = [colors_map.get(cat, '#cbd5e0') for cat in categories]
 
-    plt.figure(figsize=(7, 7))
+    fig = plt.figure(figsize=(7, 7))
     wedges, texts, autotexts = plt.pie(
         sizes, 
         labels=categories, 
@@ -495,17 +474,20 @@ def plot_sentiment_distribution(df: pd.DataFrame, output_dir: str = "plots") -> 
     
     # Add center circle to make it a donut
     centre_circle = plt.Circle((0,0), 0.55, fc='white')
-    fig = plt.gcf()
     fig.gca().add_artist(centre_circle)
 
     # Style percentage text to be readable
     for autotext in autotexts:
         autotext.set_color('white')
 
-    plt.title("Overall Sentiment Distribution\n(RoBERTa Sentiment Classifier)", fontsize=14, pad=20, weight="bold")
-    plt.tight_layout()
-    save_plot_copies("sentiment_distribution.png", output_dir=output_dir)
-    plt.close()
+    render_flat_chart(
+        fig=fig,
+        filename="sentiment_distribution.png",
+        output_dir=output_dir,
+        title="Overall Sentiment Distribution\n(RoBERTa Sentiment Classifier)",
+        title_weight="bold",
+        title_pad=20,
+    )
 
 
 def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots", user_stances: Optional[pd.DataFrame] = None) -> None:
@@ -534,28 +516,11 @@ def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots", user_s
             elif leaning == 'alcaraz':
                 alcaraz_records.append({"date": row['date'], "sentiment": row['sentiment_compound']})
     else:
-        if 'linked_entities' not in df.columns:
-            print("Warning: 'linked_entities' not found. Cannot do mentions-based fallback. Skipping plot.")
-            return
         print("[NLP] Plotting sentiment trajectory grouped by keyword mentions (fallback)...")
         for _, row in df.iterrows():
-            linked_ents = row['linked_entities']
-            if isinstance(linked_ents, str):
-                import ast
-                try:
-                    linked_ents = ast.literal_eval(linked_ents)
-                except Exception:
-                    linked_ents = []
-            
-            uris = {ent['uri'] for ent in linked_ents if isinstance(ent, dict)}
-            text_lower = str(row['text']).lower()
-            
-            is_sinner = SINNER_URI in uris or any(k in text_lower for k in SINNER_KEYWORDS)
-            is_alcaraz = ALCARAZ_URI in uris or any(k in text_lower for k in ALCARAZ_KEYWORDS)
-
-            if is_sinner:
+            if row.get('is_sinner', False):
                 sinner_records.append({"date": row['date'], "sentiment": row['sentiment_compound']})
-            if is_alcaraz:
+            if row.get('is_alcaraz', False):
                 alcaraz_records.append({"date": row['date'], "sentiment": row['sentiment_compound']})
 
     df_sinner = pd.DataFrame(sinner_records)
@@ -633,7 +598,7 @@ def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots", user_s
                   "(Daily Avg RoBERTa Sentiment vs. Post Volume by Fanbase Leaning)" if use_fanbase else
                   "Sentiment Trajectory & Post Volume Over Time (US Open 2025)\n"
                   "(Daily Avg RoBERTa Sentiment vs. Post Volume)")
-    plt.title(title_text, fontsize=14, pad=15, weight="bold")
+    
     ax1.set_xlabel("Date", fontsize=11, labelpad=10)
     ax1.set_ylabel("Average Sentiment Compound Score (Lines)", fontsize=11, labelpad=10)
     ax1.grid(True, linestyle=':', alpha=0.6)
@@ -645,10 +610,15 @@ def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots", user_s
     ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper center', bbox_to_anchor=(0.5, -0.2), ncol=4, fontsize=10)
     
     fig.autofmt_xdate()
-    plt.tight_layout()
     
-    save_plot_copies("sentiment_over_time.png", output_dir=output_dir)
-    plt.close()
+    render_flat_chart(
+        fig=fig,
+        filename="sentiment_over_time.png",
+        output_dir=output_dir,
+        title=title_text,
+        title_weight="bold",
+        title_pad=15,
+    )
 
 
 
