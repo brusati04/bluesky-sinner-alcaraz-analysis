@@ -16,6 +16,13 @@ ALCARAZ_URI = "http://dbpedia.org/resource/Carlos_Alcaraz"
 SINNER_KEYWORDS = {"sinner", "jannik"}
 ALCARAZ_KEYWORDS = {"alcaraz", "carlos", "carlitos"}
 
+# The 8 primary NRC emotion categories. Shared by the preprocessing/enrichment
+# stage (emotion scoring) and the sentiment stage (emotion plotting).
+NRC_EMOTIONS = [
+    'fear', 'anger', 'anticipation', 'trust',
+    'surprise', 'sadness', 'disgust', 'joy'
+]
+
 
 import pandas as pd
 import matplotlib.pyplot as plt

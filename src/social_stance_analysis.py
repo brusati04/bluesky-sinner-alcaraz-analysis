@@ -1,5 +1,10 @@
-# stance_analysis.py
-import os
+# social_stance_analysis.py — stage [5]
+#
+# Reads the frozen processed CSV + network artifacts (read-only) and produces the
+# stance aggregations, polarization metrics, fanbase study, diagnostics and plots.
+# All stance COMPUTATION (post/user stance scoring + classification) is owned
+# upstream by the preprocessing/enrichment stage; this module only reuses those
+# helpers (an allowed downstream -> upstream import) for diagnostics.
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -7,26 +12,21 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from typing import Dict, Tuple, List, Optional
 
-# Import constants from the NLP module
-from social_sentiment_analysis import (
-    W_SENTIMENT,
-    W_FREQUENCY,
-)
-
-# For community colors
+# For community colors (upstream network stage)
 from social_network_analysis import get_community_color_map
 
-# For saving plots and NLP helpers
-from utils import (
-    save_plot_copies,
-    render_flat_chart,
-    get_sentiment_clf_roberta,
-    detect_player_mentions,
-    SINNER_URI,
-    ALCARAZ_URI,
-    SINNER_KEYWORDS,
-    ALCARAZ_KEYWORDS,
+# Stance-computation helpers + config are owned by the preprocessing stage.
+from preprocessing import (
+    compute_user_stances,
+    classify_stances,
+    _split_dual_mention,
+    _sentence_sentiment,
+    STANCE_THRESHOLD,
+    MIN_POSTS_FOR_STANCE,
 )
+
+# For saving plots
+from utils import render_flat_chart
 
 # Sentence tokenization
 try:
@@ -36,256 +36,6 @@ except LookupError:
     nltk.download('punkt')
     from nltk.tokenize import sent_tokenize
 
-# Configuration Constants
-STANCE_THRESHOLD = 0.03
-MIN_POSTS_FOR_STANCE = 1
-DEBUG = True
-
-# Using get_sentiment_clf_roberta from utils for model operations
-
-
-def _sentence_sentiment(sentence: str) -> float:
-    """Return CardiffNLP RoBERTa compound score (P(positive) - P(negative)) for a single sentence."""
-    if not sentence or not sentence.strip():
-        return 0.0
-    
-    from preprocessing import clean_text_bert
-    cleaned = clean_text_bert(sentence)
-    if not cleaned.strip():
-        return 0.0
-        
-    clf = get_sentiment_clf_roberta()
-    res = clf(cleaned, truncation=True, max_length=512)
-    scores_dict = {d['label']: d['score'] for d in res[0]}
-    
-    if 'LABEL_0' in scores_dict:
-        p_neg = scores_dict.get('LABEL_0', 0.0)
-        p_pos = scores_dict.get('LABEL_2', 0.0)
-    else:
-        p_neg = scores_dict.get('negative', 0.0)
-        p_pos = scores_dict.get('positive', 0.0)
-        
-    return p_pos - p_neg
-
-
-def _sentence_mentions(sentence: str) -> Tuple[bool, bool]:
-    """Return (mentions_sinner, mentions_alcaraz) for a sentence."""
-    text_lower = sentence.lower()
-    has_sinner = any(kw in text_lower for kw in SINNER_KEYWORDS)
-    has_alcaraz = any(kw in text_lower for kw in ALCARAZ_KEYWORDS)
-    return has_sinner, has_alcaraz
-
-
-def _split_dual_mention(text: str, sentence_scores: Dict[str, float]) -> Tuple[float, float]:
-    """
-    Given a post mentioning both players, return (sinner_score, alcaraz_score)
-    based on sentence-level sentiment using precomputed sentence scores.
-    """
-    sentences = sent_tokenize(str(text))
-    
-    sinner_scores = []
-    alcaraz_scores = []
-    
-    for sent in sentences:
-        sent_clean = sent.strip()
-        if not sent_clean:
-            continue
-        mentions_sinner, mentions_alcaraz = _sentence_mentions(sent_clean)
-        sentiment = sentence_scores.get(sent_clean, 0.0)
-        
-        if mentions_sinner and not mentions_alcaraz:
-            sinner_scores.append(sentiment)
-        elif mentions_alcaraz and not mentions_sinner:
-            alcaraz_scores.append(sentiment)
-        elif mentions_sinner and mentions_alcaraz:
-            sinner_scores.append(sentiment * 0.5)
-            alcaraz_scores.append(sentiment * 0.5)
-    
-    sinner_score = np.mean(sinner_scores) if sinner_scores else 0.0
-    alcaraz_score = np.mean(alcaraz_scores) if alcaraz_scores else 0.0
-    
-    return sinner_score, alcaraz_score
-
-
-# ═════════════════════════════════════════════════════════════════════
-# PLAYER DETECTION
-# ═════════════════════════════════════════════════════════════════════
-
-def detect_players(df: pd.DataFrame) -> pd.DataFrame:
-    """Add is_sinner / is_alcaraz boolean columns using linked_entities and keyword fallback."""
-    if 'is_sinner' in df.columns and 'is_alcaraz' in df.columns:
-        return df
-
-    def _detect_row(row):
-        return detect_player_mentions(row.get('text', ''), row.get('linked_entities', []))
-    
-    detection = df.apply(_detect_row, axis=1, result_type='expand')
-    detection.columns = ['is_sinner', 'is_alcaraz']
-    return pd.concat([df, detection], axis=1)
-
-
-
-# ═════════════════════════════════════════════════════════════════════
-# POST-LEVEL STANCE SCORES
-# ═════════════════════════════════════════════════════════════════════
-
-def compute_post_stances(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Add stance_sinner / stance_alcaraz columns.
-    - Single-mention posts: full RoBERTa compound assigned to that player
-    - Dual-mention posts: sentence-level sentiment split
-    - No-mention posts: 0 for both
-    """
-    compound = df['sentiment_compound'].fillna(0)
-    
-    single_sinner = df['is_sinner'] & ~df['is_alcaraz']
-    single_alcaraz = df['is_alcaraz'] & ~df['is_sinner']
-    both_players = df['is_sinner'] & df['is_alcaraz']
-    neither = ~df['is_sinner'] & ~df['is_alcaraz']
-    
-    df['stance_sinner'] = 0.0
-    df['stance_alcaraz'] = 0.0
-    
-    df.loc[single_sinner, 'stance_sinner'] = compound[single_sinner]
-    df.loc[single_alcaraz, 'stance_alcaraz'] = compound[single_alcaraz]
-    
-    if both_players.any():
-        if DEBUG:
-            print(f"\n[STANCE] Extracting sentences for {both_players.sum()} dual-mention posts...")
-        dual_indices = df[both_players].index
-        dual_texts = df.loc[both_players, 'text']
-        
-        post_sentences = {}
-        all_unique_sentences = set()
-        
-        for idx, text in zip(dual_indices, dual_texts):
-            sents = sent_tokenize(str(text))
-            post_sentences[idx] = sents
-            for s in sents:
-                s_clean = s.strip()
-                if s_clean:
-                    all_unique_sentences.add(s_clean)
-                    
-        # Score all unique sentences in batch
-        unique_list = list(all_unique_sentences)
-        sentence_scores = {}
-        
-        if unique_list:
-            clf = get_sentiment_clf_roberta()
-            batch_size = 128
-            
-            from preprocessing import clean_text_bert
-            bert_inputs = [clean_text_bert(s) for s in unique_list]
-            
-            def input_generator():
-                for t in bert_inputs:
-                    yield t if (isinstance(t, str) and t.strip() != "") else " "
-            
-            print(f"[STANCE] Scoring {len(unique_list)} unique sentences in parallel batches of size {batch_size}...")
-            raw_results = clf(
-                input_generator(),
-                batch_size=batch_size,
-                truncation=True,
-                max_length=512
-            )
-            
-            for s, res in zip(unique_list, raw_results):
-                scores_dict = {d['label']: d['score'] for d in res}
-                if 'LABEL_0' in scores_dict:
-                    p_neg = scores_dict.get('LABEL_0', 0.0)
-                    p_pos = scores_dict.get('LABEL_2', 0.0)
-                else:
-                    p_neg = scores_dict.get('negative', 0.0)
-                    p_pos = scores_dict.get('positive', 0.0)
-                sentence_scores[s] = p_pos - p_neg
-                
-        # Split dual mentions using the precomputed sentence scores
-        sinner_scores = []
-        alcaraz_scores = []
-        for idx in dual_indices:
-            s_score, a_score = _split_dual_mention(df.loc[idx, 'text'], sentence_scores)
-            sinner_scores.append(s_score)
-            alcaraz_scores.append(a_score)
-            
-        df.loc[both_players, 'stance_sinner'] = sinner_scores
-        df.loc[both_players, 'stance_alcaraz'] = alcaraz_scores
-        
-    if DEBUG:
-        print(f"[STANCE] Post-level stance scores computed.")
-        print(f"  Single Sinner:  {single_sinner.sum():>6} posts")
-        print(f"  Single Alcaraz: {single_alcaraz.sum():>6} posts")
-        print(f"  Both players:   {both_players.sum():>6} posts (sentence-split)")
-        print(f"  Neither:        {neither.sum():>6} posts")
-        print(f"  Stance Sinner range:  {df['stance_sinner'].min():.3f} to {df['stance_sinner'].max():.3f}")
-        print(f"  Stance Alcaraz range: {df['stance_alcaraz'].min():.3f} to {df['stance_alcaraz'].max():.3f}")
-        
-    return df
-
-
-# ═════════════════════════════════════════════════════════════════════
-# USER-LEVEL NET STANCE
-# ═════════════════════════════════════════════════════════════════════
-
-def compute_user_stances(df: pd.DataFrame, min_posts: int = MIN_POSTS_FOR_STANCE) -> pd.DataFrame:
-    """
-    Aggregate per author: mean stance scores, frequencies, and net stance.
-    """
-    grouped = df.groupby('author_handle')
-    user_stances = grouped.agg(
-        mean_sinner=('stance_sinner', 'mean'),
-        mean_alcaraz=('stance_alcaraz', 'mean'),
-        n_sinner=('is_sinner', 'sum'),
-        n_alcaraz=('is_alcaraz', 'sum'),
-        post_count=('stance_sinner', 'count')
-    )
-    
-    total_users_before = len(user_stances)
-    user_stances = user_stances[user_stances['post_count'] >= min_posts]
-    if DEBUG:
-        print(f"\n[STANCE] User filtering: {total_users_before} -> {len(user_stances)} users (min {min_posts} posts)")
-    
-    user_stances[['mean_sinner', 'mean_alcaraz']] = user_stances[['mean_sinner', 'mean_alcaraz']].fillna(0.0)
-    
-    total_mentions = user_stances['n_sinner'] + user_stances['n_alcaraz']
-    user_stances['freq_sinner'] = (user_stances['n_sinner'] / total_mentions.replace(0, np.nan)).fillna(0)
-    user_stances['freq_alcaraz'] = (user_stances['n_alcaraz'] / total_mentions.replace(0, np.nan)).fillna(0)
-    
-    user_stances['net_stance'] = (
-        W_SENTIMENT * (user_stances['mean_sinner'] - user_stances['mean_alcaraz'])
-        + W_FREQUENCY * (user_stances['freq_sinner'] - user_stances['freq_alcaraz'])
-    )
-    
-    if DEBUG:
-        print(f"[STANCE] Net stance range: {user_stances['net_stance'].min():.3f} to {user_stances['net_stance'].max():.3f}")
-        print(f"[STANCE] Net stance mean:  {user_stances['net_stance'].mean():.3f}")
-        print(f"[STANCE] Net stance std:   {user_stances['net_stance'].std():.3f}")
-    
-    return user_stances
-
-
-# ═════════════════════════════════════════════════════════════════════
-# STANCE CLASSIFICATION
-# ═════════════════════════════════════════════════════════════════════
-
-def classify_stances(user_stances: pd.DataFrame, threshold: float = STANCE_THRESHOLD) -> pd.DataFrame:
-    """Assign stance_leaning based on net_stance threshold."""
-    def label(score):
-        if score > threshold:
-            return 'sinner'
-        elif score < -threshold:
-            return 'alcaraz'
-        return 'neutral'
-    
-    user_stances['stance_leaning'] = user_stances['net_stance'].apply(label)
-    
-    if DEBUG:
-        counts = user_stances['stance_leaning'].value_counts()
-        total = len(user_stances)
-        for stance in ['sinner', 'alcaraz', 'neutral']:
-            n = counts.get(stance, 0)
-            print(f"[STANCE] {stance.capitalize():>8}: {n:>5} ({n/total*100:.1f}%)")
-    
-    return user_stances
 
 
 # ═════════════════════════════════════════════════════════════════════

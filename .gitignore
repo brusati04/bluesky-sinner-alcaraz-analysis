@@ -185,3 +185,8 @@ lab/
 
 # Hugging Face Model Cache
 .huggingface_cache/
+
+# Refactor verification baselines (gitignored, not part of the repo)
+_baseline/
+_rerun_original/
+_baseline_checksums.txt
