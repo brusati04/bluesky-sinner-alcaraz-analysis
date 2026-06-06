@@ -10,15 +10,14 @@ np.random.seed(42)
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 sys.path.append(os.path.join(os.path.dirname(__file__), 'web'))
 
-from preprocessing import prepare_dataset
+from preprocessing import prepare_dataset, plot_community_wordcloud
 from social_network_analysis import (build_networks, calculate_centralities,
                                       run_community_detection, save_initial_centrality_csv,
                                       plot_network_graphs, plot_filtered_network_graph,
                                       get_filtered_networks)
 from social_sentiment_analysis import (plot_community_emotion_profiles,
                                       plot_sentiment_distribution,
-                                      plot_sentiment_over_time,
-                                      plot_fanbase_wordclouds)
+                                      plot_sentiment_over_time)
 
 RAW_DATA_PATH = "data/sinner_alcaraz_posts.csv"
 PROCESSED_DATA_PATH = "data/sinner_alcaraz_processed.csv"
@@ -52,8 +51,8 @@ def main() -> None:
     print("[NLP] Generating sentiment visualization plots...")
     plot_sentiment_distribution(df_processed)
     plot_sentiment_over_time(df_processed)
-    print("[NLP] Generating fanbase word clouds...")
-    plot_fanbase_wordclouds(df_processed)
+    print("[NLP] Generating community word cloud...")
+    plot_community_wordcloud(df_processed)
     print("[NLP] Plots successfully generated and saved to plots/ and report/")
 
 

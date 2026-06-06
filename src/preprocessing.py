@@ -10,8 +10,9 @@ import spacy
 import nltk
 from nltk.tokenize import TweetTokenizer
 from nltk.corpus import stopwords
+import matplotlib.pyplot as plt
 
-from utils import parse_list_col, build_did_to_handle
+from utils import parse_list_col, build_did_to_handle, save_plot_copies
 
 # Ensure the NLTK resources required for tokenisation/stopwords are available.
 for _resource in ['stopwords', 'punkt', 'punkt_tab']:
@@ -127,3 +128,41 @@ def prepare_dataset(raw_filepath: str, processed_filepath: str) -> tuple[Optiona
     from social_sentiment_analysis import run_nlp_enrichment
     df_processed = run_nlp_enrichment(df, output_filepath=processed_filepath)["df"]
     return df_processed, did_to_handle
+
+
+def plot_community_wordcloud(df: pd.DataFrame, output_dir: str = "plots") -> None:
+    """Generate and save a single word cloud for the entire community using preprocessed text."""
+    
+    if 'preprocessed_text' not in df.columns:
+        print("Warning: 'preprocessed_text' column not found. Skipping word cloud.")
+        return
+
+    from wordcloud import WordCloud
+
+    # Filter out empty preprocessed texts and combine
+    valid_texts = df['preprocessed_text'].dropna().astype(str).tolist()
+    valid_texts = [t for t in valid_texts if t.strip() != ""]
+
+    if not valid_texts:
+        print("Warning: No words found for community word cloud. Skipping.")
+        return
+
+    community_text = " ".join(valid_texts)
+    
+    # Generate single community word cloud
+    wordcloud_community = WordCloud(
+        width=800,
+        height=400,
+        background_color='white',
+        colormap='viridis',
+        random_state=42,
+        max_words=300
+    ).generate(community_text)
+    
+    plt.figure(figsize=(10, 5))
+    plt.imshow(wordcloud_community, interpolation='bilinear')
+    plt.axis('off')
+    plt.title("Bluesky Community - Overall Word Cloud\n(US Open 2025)", fontsize=16, pad=15, weight='bold')
+    plt.tight_layout()
+    save_plot_copies("community_wordcloud.png", output_dir=output_dir)
+    plt.close()

@@ -210,27 +210,18 @@ Jannik Sinner & 6,366 & 0.1134 \\
 \subsection{Temporal Sentiment Dynamics}
 The rolling sentiment dynamics reflect the key events of the US Open 2025. Pre-match tension and doping queries caused a downward pressure on sentiment in late August (reaching a local minimum around the announcement of Sinner's doping case results), followed by a steady recovery and stabilization during the actual tournament match days as the athletic competition took center stage.
 
-\subsection{Fanbase Word Clouds}
-To analyze and compare the specific semantic themes associated with each player's digital presence on Bluesky, word clouds were generated from the lemmatized and stopword-filtered \texttt{preprocessed\_text} column (Figure~\ref{fig:wordclouds}). To reinforce visual consistency, Jannik Sinner's word cloud is styled in orange hues (Figure~\ref{fig:wordcloud_sinner}) and Carlos Alcaraz's word cloud is styled in blue hues (Figure~\ref{fig:wordcloud_alcaraz}).
+\subsection{Community Word Cloud}
+To analyze and visualize the overall semantic themes associated with the digital discourse surrounding the rivalry on Bluesky, a community-wide word cloud was generated from the lemmatized and stopword-filtered \texttt{preprocessed\_text} corpus (Figure~\ref{fig:community_wordcloud}).
 
-Sinner's word cloud highlights terms such as \textit{sinner}, \textit{jannik}, and words related to his tournament performance, as well as clusters referencing the doping/Clostebol case and matches against Medvedev and Fritz. Conversely, Alcaraz's word cloud features high-frequency keywords like \textit{alcaraz}, \textit{carlos}, \textit{carlitos}, and terms describing his US Open matches and rivalry dynamics.
+The word cloud highlights high-frequency terms such as \textit{sinner}, \textit{alcaraz}, \textit{jannik}, \textit{carlos}, \textit{carlitos}, and other tournament-related terms, demonstrating that the central focus of the overall community is tightly bound to match play, results, rivalry dynamics, and the surrounding news topics during the US Open 2025.
 
 \begin{figure}[H]
     \centering
-    \begin{subfigure}[b]{0.48\textwidth}
-        \includegraphics[width=\textwidth]{fanbase_wordcloud_sinner.png}
-        \caption{Jannik Sinner Word Cloud (Orange theme)}
-        \label{fig:wordcloud_sinner}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[b]{0.48\textwidth}
-        \includegraphics[width=\textwidth]{fanbase_wordcloud_alcaraz.png}
-        \caption{Carlos Alcaraz Word Cloud (Blue theme)}
-        \label{fig:wordcloud_alcaraz}
-    \end{subfigure}
-    \caption{Fanbase Word Clouds for Sinner and Alcaraz mentions on Bluesky.}
-    \label{fig:wordclouds}
+    \includegraphics[width=0.75\textwidth]{community_wordcloud.png}
+    \caption{Overall Community Word Cloud on Bluesky during the US Open 2025.}
+    \label{fig:community_wordcloud}
 \end{figure}
+
 
 ---
 
