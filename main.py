@@ -17,7 +17,8 @@ from social_network_analysis import (build_networks, calculate_centralities,
                                       get_filtered_networks)
 from social_sentiment_analysis import (plot_community_emotion_profiles,
                                       plot_sentiment_distribution,
-                                      plot_sentiment_over_time)
+                                      plot_sentiment_over_time,
+                                      plot_fanbase_wordclouds)
 
 RAW_DATA_PATH = "data/sinner_alcaraz_posts.csv"
 PROCESSED_DATA_PATH = "data/sinner_alcaraz_processed.csv"
@@ -51,6 +52,8 @@ def main() -> None:
     print("[NLP] Generating sentiment visualization plots...")
     plot_sentiment_distribution(df_processed)
     plot_sentiment_over_time(df_processed)
+    print("[NLP] Generating fanbase word clouds...")
+    plot_fanbase_wordclouds(df_processed)
     print("[NLP] Plots successfully generated and saved to plots/ and report/")
 
 

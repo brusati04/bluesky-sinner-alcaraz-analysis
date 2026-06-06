@@ -154,19 +154,19 @@ The analysis reveals that institutional accounts such as \texttt{thetennisletter
 \section{Natural Language Processing (NLP)}
 
 \subsection{Sentiment Distribution}
-Sentiment was evaluated utilizing VADER (Valence Aware Dictionary and sEntiment Reasoner). The overall sentiment has a neutral-to-positive skew, as summarized in Table~\ref{tab:sentiment_dist}. Positive posts account for 35.5\% of the corpus, neutral posts for 47.6\%, and negative posts for 16.8\%.
+Sentiment was evaluated utilizing a GPU-accelerated CardiffNLP RoBERTa sentiment classifier. The overall sentiment exhibits a heavily neutral skew, as summarized in Table~\ref{tab:sentiment_dist}. Positive posts account for 16.2\% of the corpus, neutral posts for 77.2\%, and negative posts for 6.6\%.
 
 \begin{table}[H]
 \centering
-\caption{VADER Sentiment Category Distribution}
+\caption{RoBERTa Sentiment Category Distribution}
 \label{tab:sentiment_dist}
 \begin{tabular}{lcc}
 \toprule
 \textbf{Sentiment Category} & \textbf{Post Percentage} \\
 \midrule
-Positive & 35.5\% \\
-Neutral & 47.6\% \\
-Negative & 16.8\% \\
+Positive & 16.2\% \\
+Neutral & 77.2\% \\
+Negative & 6.6\% \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -191,24 +191,46 @@ Anger & 407 \\
 \end{table}
 
 \subsection{Named Entity Linking (NEL)}
-By running Named Entity Recognition (NER) followed by a local Named Entity Linking mapping optimized for the core rivalry entities, we extracted and linked the key subjects to DBpedia URIs. The comparative volume and average sentiments are summarized in Table~\ref{tab:player_comparison}. Carlos Alcaraz received slightly more mention volume (6,530 vs. 6,366) and displayed a higher average sentiment score (0.1337 vs. 0.1170) compared to Jannik Sinner.
+By running Named Entity Recognition (NER) followed by a local Named Entity Linking mapping optimized for the core rivalry entities, we extracted and linked the key subjects to DBpedia URIs. The comparative volume and average sentiments are summarized in Table~\ref{tab:player_comparison}. Carlos Alcaraz received slightly more mention volume (6,530 vs. 6,366) and displayed a higher average sentiment score (0.1502 vs. 0.1134) compared to Jannik Sinner.
 
 \begin{table}[H]
 \centering
-\caption{Comparison of Rivalry Player Mention Volume and Average VADER Sentiment}
+\caption{Comparison of Rivalry Player Mention Volume and Average RoBERTa Sentiment}
 \label{tab:player_comparison}
 \begin{tabular}{lcc}
 \toprule
-\textbf{Player} & \textbf{Mention Volume} & \textbf{Avg. VADER Sentiment} \\
+\textbf{Player} & \textbf{Mention Volume} & \textbf{Avg. RoBERTa Sentiment} \\
 \midrule
-Carlos Alcaraz & 6,530 & 0.1337 \\
-Jannik Sinner & 6,366 & 0.1170 \\
+Carlos Alcaraz & 6,530 & 0.1502 \\
+Jannik Sinner & 6,366 & 0.1134 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsection{Temporal Sentiment Dynamics}
 The rolling sentiment dynamics reflect the key events of the US Open 2025. Pre-match tension and doping queries caused a downward pressure on sentiment in late August (reaching a local minimum around the announcement of Sinner's doping case results), followed by a steady recovery and stabilization during the actual tournament match days as the athletic competition took center stage.
+
+\subsection{Fanbase Word Clouds}
+To analyze and compare the specific semantic themes associated with each player's digital presence on Bluesky, word clouds were generated from the lemmatized and stopword-filtered \texttt{preprocessed\_text} column (Figure~\ref{fig:wordclouds}). To reinforce visual consistency, Jannik Sinner's word cloud is styled in orange hues (Figure~\ref{fig:wordcloud_sinner}) and Carlos Alcaraz's word cloud is styled in blue hues (Figure~\ref{fig:wordcloud_alcaraz}).
+
+Sinner's word cloud highlights terms such as \textit{sinner}, \textit{jannik}, and words related to his tournament performance, as well as clusters referencing the doping/Clostebol case and matches against Medvedev and Fritz. Conversely, Alcaraz's word cloud features high-frequency keywords like \textit{alcaraz}, \textit{carlos}, \textit{carlitos}, and terms describing his US Open matches and rivalry dynamics.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{fanbase_wordcloud_sinner.png}
+        \caption{Jannik Sinner Word Cloud (Orange theme)}
+        \label{fig:wordcloud_sinner}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{fanbase_wordcloud_alcaraz.png}
+        \caption{Carlos Alcaraz Word Cloud (Blue theme)}
+        \label{fig:wordcloud_alcaraz}
+    \end{subfigure}
+    \caption{Fanbase Word Clouds for Sinner and Alcaraz mentions on Bluesky.}
+    \label{fig:wordclouds}
+\end{figure}
 
 ---
 

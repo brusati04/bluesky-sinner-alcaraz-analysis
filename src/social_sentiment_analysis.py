@@ -383,9 +383,9 @@ def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots") -> Non
     alcaraz_vol = alcaraz_vol.sort_index()
     
     if not sinner_vol.empty:
-        ax2.fill_between(sinner_vol.index, sinner_vol.values, alpha=0.12, color='#00b4d8', label='Sinner Post Volume')
+        ax2.fill_between(sinner_vol.index, sinner_vol.values, alpha=0.12, color='#f39c12', label='Sinner Post Volume')
     if not alcaraz_vol.empty:
-        ax2.fill_between(alcaraz_vol.index, alcaraz_vol.values, alpha=0.12, color='#ffb3c1', label='Alcaraz Post Volume')
+        ax2.fill_between(alcaraz_vol.index, alcaraz_vol.values, alpha=0.12, color='#00b4d8', label='Alcaraz Post Volume')
         
     ax2.set_ylabel("Daily Post Volume (Shaded)", color='gray', fontsize=11, labelpad=10)
     ax2.tick_params(axis='y', labelcolor='gray')
@@ -393,9 +393,9 @@ def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots") -> Non
 
     # 2. Plot Average Sentiment Compound Scores on the primary Y-axis (ax1)
     if not sinner_trend.empty:
-        ax1.plot(sinner_trend.index, sinner_trend.values, marker='o', linewidth=2.5, color='#023e8a', label='Jannik Sinner Sentiment')
+        ax1.plot(sinner_trend.index, sinner_trend.values, marker='o', linewidth=2.5, color='#d35400', label='Jannik Sinner Sentiment')
     if not alcaraz_trend.empty:
-        ax1.plot(alcaraz_trend.index, alcaraz_trend.values, marker='s', linewidth=2.5, color='#d90429', label='Carlos Alcaraz Sentiment')
+        ax1.plot(alcaraz_trend.index, alcaraz_trend.values, marker='s', linewidth=2.5, color='#023e8a', label='Carlos Alcaraz Sentiment')
 
     ax1.axhline(0, color='gray', linestyle='--', linewidth=1, alpha=0.7)
     
@@ -442,3 +442,84 @@ def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots") -> Non
     
     save_plot_copies("sentiment_over_time.png", output_dir=output_dir)
     plt.close()
+
+
+def plot_fanbase_wordclouds(df: pd.DataFrame, output_dir: str = "plots") -> None:
+    """Generate and save fanbase word clouds for Sinner (Orange theme) and Alcaraz (Blue theme)."""
+    if 'preprocessed_text' not in df.columns or 'linked_entities' not in df.columns or 'text' not in df.columns:
+        print("Warning: Required columns for word clouds not found. Skipping plot.")
+        return
+
+    from wordcloud import WordCloud
+
+    sinner_words = []
+    alcaraz_words = []
+
+    for _, row in df.iterrows():
+        linked_ents = row['linked_entities']
+        if isinstance(linked_ents, str):
+            import ast
+            try:
+                linked_ents = ast.literal_eval(linked_ents)
+            except Exception:
+                linked_ents = []
+        
+        uris = {ent['uri'] for ent in linked_ents if isinstance(ent, dict)}
+        text_lower = str(row['text']).lower()
+        
+        is_sinner = SINNER_URI in uris or any(k in text_lower for k in SINNER_KEYWORDS)
+        is_alcaraz = ALCARAZ_URI in uris or any(k in text_lower for k in ALCARAZ_KEYWORDS)
+
+        prep_text = row['preprocessed_text']
+        if pd.isna(prep_text) or str(prep_text).strip() == "":
+            continue
+
+        if is_sinner:
+            sinner_words.append(str(prep_text))
+        if is_alcaraz:
+            alcaraz_words.append(str(prep_text))
+
+    # Sinner Word Cloud (Orange Theme)
+    if sinner_words:
+        sinner_text = " ".join(sinner_words)
+        wordcloud_sinner = WordCloud(
+            width=800,
+            height=400,
+            background_color='white',
+            colormap='Oranges_r',
+            random_state=42,
+            max_words=150
+        ).generate(sinner_text)
+        
+        plt.figure(figsize=(10, 5))
+        plt.imshow(wordcloud_sinner, interpolation='bilinear')
+        plt.axis('off')
+        plt.title("Jannik Sinner - Fanbase Word Cloud", fontsize=16, pad=15, weight='bold')
+        plt.tight_layout()
+        save_plot_copies("fanbase_wordcloud_sinner.png", output_dir=output_dir)
+        plt.close()
+    else:
+        print("Warning: No words found for Sinner. Skipping Sinner word cloud.")
+
+    # Alcaraz Word Cloud (Blue Theme)
+    if alcaraz_words:
+        alcaraz_text = " ".join(alcaraz_words)
+        wordcloud_alcaraz = WordCloud(
+            width=800,
+            height=400,
+            background_color='white',
+            colormap='Blues_r',
+            random_state=42,
+            max_words=150
+        ).generate(alcaraz_text)
+        
+        plt.figure(figsize=(10, 5))
+        plt.imshow(wordcloud_alcaraz, interpolation='bilinear')
+        plt.axis('off')
+        plt.title("Carlos Alcaraz - Fanbase Word Cloud", fontsize=16, pad=15, weight='bold')
+        plt.tight_layout()
+        save_plot_copies("fanbase_wordcloud_alcaraz.png", output_dir=output_dir)
+        plt.close()
+    else:
+        print("Warning: No words found for Alcaraz. Skipping Alcaraz word cloud.")
+
