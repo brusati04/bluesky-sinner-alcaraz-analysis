@@ -508,9 +508,9 @@ def plot_sentiment_distribution(df: pd.DataFrame, output_dir: str = "plots") -> 
     plt.close()
 
 
-def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots") -> None:
-    """Plot daily average sentiment compound scores for Sinner vs. Alcaraz over time."""
-    if 'created_at' not in df.columns or 'sentiment_compound' not in df.columns or 'linked_entities' not in df.columns:
+def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots", user_stances: Optional[pd.DataFrame] = None) -> None:
+    """Plot daily average sentiment compound scores for Sinner vs. Alcaraz fanbase or mentions over time."""
+    if 'created_at' not in df.columns or 'sentiment_compound' not in df.columns:
         print("Warning: Required columns for sentiment over time not found. Skipping plot.")
         return
 
@@ -520,25 +520,43 @@ def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots") -> Non
     sinner_records = []
     alcaraz_records = []
 
-    for _, row in df.iterrows():
-        linked_ents = row['linked_entities']
-        if isinstance(linked_ents, str):
-            import ast
-            try:
-                linked_ents = ast.literal_eval(linked_ents)
-            except Exception:
-                linked_ents = []
-        
-        uris = {ent['uri'] for ent in linked_ents if isinstance(ent, dict)}
-        text_lower = str(row['text']).lower()
-        
-        is_sinner = SINNER_URI in uris or any(k in text_lower for k in SINNER_KEYWORDS)
-        is_alcaraz = ALCARAZ_URI in uris or any(k in text_lower for k in ALCARAZ_KEYWORDS)
+    # Determine whether we use codebase fanbase partition or keyword mentions
+    use_fanbase = user_stances is not None and 'stance_leaning' in user_stances.columns
 
-        if is_sinner:
-            sinner_records.append({"date": row['date'], "sentiment": row['sentiment_compound']})
-        if is_alcaraz:
-            alcaraz_records.append({"date": row['date'], "sentiment": row['sentiment_compound']})
+    if use_fanbase:
+        user_leanings = user_stances['stance_leaning'].to_dict()
+        print("[NLP] Plotting sentiment trajectory grouped by codebase fanbase partition...")
+        for _, row in df.iterrows():
+            author = row['author_handle']
+            leaning = user_leanings.get(author, 'neutral')
+            if leaning == 'sinner':
+                sinner_records.append({"date": row['date'], "sentiment": row['sentiment_compound']})
+            elif leaning == 'alcaraz':
+                alcaraz_records.append({"date": row['date'], "sentiment": row['sentiment_compound']})
+    else:
+        if 'linked_entities' not in df.columns:
+            print("Warning: 'linked_entities' not found. Cannot do mentions-based fallback. Skipping plot.")
+            return
+        print("[NLP] Plotting sentiment trajectory grouped by keyword mentions (fallback)...")
+        for _, row in df.iterrows():
+            linked_ents = row['linked_entities']
+            if isinstance(linked_ents, str):
+                import ast
+                try:
+                    linked_ents = ast.literal_eval(linked_ents)
+                except Exception:
+                    linked_ents = []
+            
+            uris = {ent['uri'] for ent in linked_ents if isinstance(ent, dict)}
+            text_lower = str(row['text']).lower()
+            
+            is_sinner = SINNER_URI in uris or any(k in text_lower for k in SINNER_KEYWORDS)
+            is_alcaraz = ALCARAZ_URI in uris or any(k in text_lower for k in ALCARAZ_KEYWORDS)
+
+            if is_sinner:
+                sinner_records.append({"date": row['date'], "sentiment": row['sentiment_compound']})
+            if is_alcaraz:
+                alcaraz_records.append({"date": row['date'], "sentiment": row['sentiment_compound']})
 
     df_sinner = pd.DataFrame(sinner_records)
     df_alcaraz = pd.DataFrame(alcaraz_records)
@@ -560,20 +578,26 @@ def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots") -> Non
     sinner_vol = sinner_vol.sort_index()
     alcaraz_vol = alcaraz_vol.sort_index()
     
+    vol_label_s = 'Sinner Post Volume'
+    vol_label_a = 'Alcaraz Post Volume'
+    
     if not sinner_vol.empty:
-        ax2.fill_between(sinner_vol.index, sinner_vol.values, alpha=0.12, color='#f39c12', label='Sinner Post Volume')
+        ax2.fill_between(sinner_vol.index, sinner_vol.values, alpha=0.12, color='#f39c12', label=vol_label_s)
     if not alcaraz_vol.empty:
-        ax2.fill_between(alcaraz_vol.index, alcaraz_vol.values, alpha=0.12, color='#00b4d8', label='Alcaraz Post Volume')
+        ax2.fill_between(alcaraz_vol.index, alcaraz_vol.values, alpha=0.12, color='#00b4d8', label=vol_label_a)
         
     ax2.set_ylabel("Daily Post Volume (Shaded)", color='gray', fontsize=11, labelpad=10)
     ax2.tick_params(axis='y', labelcolor='gray')
     ax2.grid(False)  # Disable grid lines for secondary axis to avoid clutter
 
     # 2. Plot Average Sentiment Compound Scores on the primary Y-axis (ax1)
+    line_label_s = 'Sinner Sentiment'
+    line_label_a = 'Alcaraz Sentiment'
+    
     if not sinner_trend.empty:
-        ax1.plot(sinner_trend.index, sinner_trend.values, marker='o', linewidth=2.5, color='#d35400', label='Jannik Sinner Sentiment')
+        ax1.plot(sinner_trend.index, sinner_trend.values, marker='o', linewidth=2.5, color='#d35400', label=line_label_s)
     if not alcaraz_trend.empty:
-        ax1.plot(alcaraz_trend.index, alcaraz_trend.values, marker='s', linewidth=2.5, color='#023e8a', label='Carlos Alcaraz Sentiment')
+        ax1.plot(alcaraz_trend.index, alcaraz_trend.values, marker='s', linewidth=2.5, color='#023e8a', label=line_label_a)
 
     ax1.axhline(0, color='gray', linestyle='--', linewidth=1, alpha=0.7)
     
@@ -605,7 +629,11 @@ def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots") -> Non
         except Exception as e:
             print(f"Warning: Could not annotate event {label} at {date_str}: {e}")
 
-    plt.title("Sentiment Trajectory & Post Volume Over Time (US Open 2025)\n(Daily Avg RoBERTa Sentiment vs. Post Volume)", fontsize=14, pad=15, weight="bold")
+    title_text = ("Sentiment Trajectory & Post Volume Over Time (US Open 2025)\n"
+                  "(Daily Avg RoBERTa Sentiment vs. Post Volume by Fanbase Leaning)" if use_fanbase else
+                  "Sentiment Trajectory & Post Volume Over Time (US Open 2025)\n"
+                  "(Daily Avg RoBERTa Sentiment vs. Post Volume)")
+    plt.title(title_text, fontsize=14, pad=15, weight="bold")
     ax1.set_xlabel("Date", fontsize=11, labelpad=10)
     ax1.set_ylabel("Average Sentiment Compound Score (Lines)", fontsize=11, labelpad=10)
     ax1.grid(True, linestyle=':', alpha=0.6)
@@ -613,7 +641,8 @@ def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots") -> Non
     # Combine legends from both axes
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left', fontsize=10)
+    # Place legend horizontally below the plot to avoid overlapping any lines or event labels
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper center', bbox_to_anchor=(0.5, -0.2), ncol=4, fontsize=10)
     
     fig.autofmt_xdate()
     plt.tight_layout()

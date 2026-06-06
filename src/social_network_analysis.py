@@ -505,6 +505,103 @@ def plot_network_graphs_by_emotion(
     plt.close(fig2)
 
 
+def plot_network_graphs_by_fanbase(
+    Gu: nx.Graph,
+    Gd: nx.DiGraph,
+    df_cent: pd.DataFrame,
+    centralities: dict,
+    output_dir: str = "plots",
+    pos: Optional[dict] = None,
+    pos_dir: Optional[dict] = None,
+) -> None:
+    """Render undirected and directed network graphs with nodes coloured by fanbase leaning.
+
+    Reuses the precomputed layouts pos and pos_dir to keep node positions stable.
+    Sinner fanbase color: orange (#f39c12)
+    Alcaraz fanbase color: blue (#00b4d8)
+    Neutral fanbase color: gray (#cbd5e0)
+    """
+    deg_cent = centralities["deg_cent"]
+    pagerank = centralities["pagerank"]
+    
+    FANBASE_COLORS = {
+        'sinner': '#f39c12',
+        'alcaraz': '#00b4d8',
+        'neutral': '#cbd5e0'
+    }
+
+    # Map users to stance leaning using df_cent
+    stance_map = dict(zip(df_cent['user'], df_cent['stance_leaning']))
+    
+    def get_color(node):
+        lean = stance_map.get(node, 'neutral')
+        if pd.isna(lean) or not lean:
+            lean = 'neutral'
+        return FANBASE_COLORS.get(lean, FANBASE_COLORS['neutral'])
+
+    nodes_in_relations = [n for n, d in Gu.degree() if d > 0]
+    if not nodes_in_relations:
+        print("Isolated graph / Not enough relationships to plot fanbase network.")
+        return
+
+    subG = Gu.subgraph(nodes_in_relations)
+    if pos is None:
+        pos = nx.spring_layout(subG, k=0.3, iterations=60, seed=42)
+
+    top_10_nodes = df_cent.sort_values(by="degree_centrality_undirected", ascending=False).head(10)['user'].tolist()
+    labels_to_draw = {node: node for node in subG.nodes() if node in top_10_nodes}
+
+    fig, ax = plt.subplots(figsize=(12, 12))
+    
+    node_colors = [get_color(node) for node in subG.nodes()]
+    node_sizes = [50 + (deg_cent[node] * 1200) for node in subG.nodes()]
+
+    nx.draw_networkx_edges(subG, pos, ax=ax, alpha=0.15, edge_color="grey")
+    nx.draw_networkx_nodes(subG, pos, ax=ax, node_size=node_sizes, node_color=node_colors, alpha=0.9, edgecolors='black', linewidths=0.5)
+    nx.draw_networkx_labels(subG, pos, ax=ax, labels=labels_to_draw, font_size=9, font_weight="bold", font_color="#1e272c")
+    
+    patches = [
+        mpatches.Patch(color='#f39c12', label='Sinner Fanbase'),
+        mpatches.Patch(color='#00b4d8', label='Alcaraz Fanbase'),
+        mpatches.Patch(color='#cbd5e0', label='Neutral')
+    ]
+    ax.legend(handles=patches, loc="lower left", fontsize=10, title="Fanbase Leaning", title_fontsize=11, framealpha=0.85)
+
+    ax.set_title("Undirected Social Network Graph — Fanbase Leaning\n(node size proportional to degree centrality)", pad=15)
+    ax.axis("off")
+    plt.tight_layout()
+    save_plot_copies("network_graph_fanbase.png", output_dir=output_dir)
+    plt.close(fig)
+
+    nodes_in_relations_dir = [n for n, d in Gd.degree() if d > 0]
+    fig2, ax2 = plt.subplots(figsize=(12, 12))
+    if nodes_in_relations_dir:
+        subG_dir = Gd.subgraph(nodes_in_relations_dir)
+        if pos_dir is None:
+            pos_dir = nx.spring_layout(subG_dir, k=0.3, iterations=60, seed=42)
+
+        node_colors_dir = [get_color(node) for node in subG_dir.nodes()]
+        node_sizes_dir = [50 + (pagerank.get(node, 0.0) * 18000) for node in subG_dir.nodes()]
+
+        nx.draw_networkx_edges(subG_dir, pos_dir, ax=ax2, alpha=0.2, edge_color="grey",
+                               arrows=True, arrowstyle='-|>', arrowsize=12,
+                               connectionstyle="arc3,rad=0.1")
+        nx.draw_networkx_nodes(subG_dir, pos_dir, ax=ax2, node_size=node_sizes_dir, node_color=node_colors_dir, alpha=0.9, edgecolors='black', linewidths=0.5)
+
+        top_10_nodes_dir = df_cent.sort_values(by="pagerank", ascending=False).head(10)['user'].tolist()
+        labels_to_draw_dir = {node: node for node in subG_dir.nodes() if node in top_10_nodes_dir}
+        nx.draw_networkx_labels(subG_dir, pos_dir, ax=ax2, labels=labels_to_draw_dir, font_size=9, font_weight="bold", font_color="#1e272c")
+    else:
+        ax2.text(0.5, 0.5, "Isolated graph / Not enough relationships", ha='center', va='center')
+
+    ax2.legend(handles=patches, loc="lower left", fontsize=10, title="Fanbase Leaning", title_fontsize=11, framealpha=0.85)
+    ax2.set_title("Directed Social Network Graph — Fanbase Leaning\n(node size proportional to PageRank prestige)", pad=15)
+    ax2.axis("off")
+    plt.tight_layout()
+    save_plot_copies("network_graph_directed_fanbase.png", output_dir=output_dir)
+    plt.close(fig2)
+
+
 def plot_network_graphs(
     Gu: nx.Graph,
     Gd: nx.DiGraph,
