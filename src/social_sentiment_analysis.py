@@ -1,292 +1,19 @@
-import os
+"""Social sentiment analysis stage [4].
+
+Reads the frozen processed CSV (and network artifacts) and renders sentiment /
+emotion visualisations. This stage is pure plotting: all NLP enrichment (cleaning,
+sentiment scoring, emotion scoring, NER/NED) is owned upstream by the preprocessing
+stage (``preprocessing.py``); nothing here recomputes enrichment.
+"""
+
 from typing import Optional
 
 import pandas as pd
-import numpy as np
-import torch
 import matplotlib.pyplot as plt
 import seaborn as sns
-from tqdm import tqdm
-from nrclex import NRCLex
-from transformers import pipeline
 
-from utils import (
-    save_plot_copies,
-    render_flat_chart,
-    detect_player_mentions,
-    score_roberta_sentiment,
-    SINNER_URI,
-    ALCARAZ_URI,
-    SINNER_KEYWORDS,
-    ALCARAZ_KEYWORDS,
-)
-from preprocessing import clean_text, clean_text_bert, preprocess
+from utils import render_flat_chart, NRC_EMOTIONS
 from social_network_analysis import get_community_color_map
-
-# ─────────────────────────────────────────────────────────────────────────────
-# CONSTANTS
-# ─────────────────────────────────────────────────────────────────────────────
-
-# The 8 primary NRC emotion categories.
-NRC_EMOTIONS = [
-    'fear', 'anger', 'anticipation', 'trust',
-    'surprise', 'sadness', 'disgust', 'joy'
-]
-
-# Mapping from GoEmotions (28 fine-grained labels) to the 8 NRC/Plutchik
-# categories, so the BERT backend produces scores comparable to NRCLex.
-GOEMOTIONS_TO_NRC = {
-    "joy":          ["joy", "amusement", "excitement", "love", "pride", "relief"],
-    "trust":        ["admiration", "approval", "gratitude", "caring"],
-    "anticipation": ["curiosity", "desire", "optimism"],
-    "surprise":     ["surprise", "realization", "confusion"],
-    "fear":         ["fear", "nervousness"],
-    "anger":        ["anger", "annoyance", "disapproval"],
-    "disgust":      ["disgust"],
-    "sadness":      ["sadness", "disappointment", "grief", "remorse", "embarrassment"],
-}
-
-# NOTE: the stance-weight and polarity groupings below are scaffolding for a
-# multi-signal stance score that the current pipeline does not yet compute.
-POSITIVE_EMOTIONS = ["emotion_joy", "emotion_trust", "emotion_anticipation"]
-NEGATIVE_EMOTIONS = ["emotion_anger", "emotion_disgust", "emotion_sadness", "emotion_fear"]
-W_SENTIMENT = 0.50
-W_EMOTION = 0.35
-W_FREQUENCY = 0.15
-
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# NLP, ENTITY MATCHING & EMOTION SCORING
-# ─────────────────────────────────────────────────────────────────────────────
-
-# Lazily-initialised GoEmotions (RoBERTa) classifier for the BERT emotion backend.
-_emotion_clf_bert = None
-
-
-def _get_emotion_clf_bert():
-    global _emotion_clf_bert
-    if _emotion_clf_bert is None:
-        device = 0 if torch.cuda.is_available() else -1
-        print(f"[NLP] Initializing GoEmotions BERT model on device={device}...")
-        _emotion_clf_bert = pipeline(
-            "text-classification",
-            model="SamLowe/roberta-base-go_emotions",
-            top_k=None,
-            truncation=True,
-            max_length=128,
-            device=device,
-        )
-    return _emotion_clf_bert
-
-
-def extract_ner(text: Optional[str]) -> list[tuple[str, str]]:
-    """Extract unique (entity_text, label) pairs for PERSON/ORG/GPE/LOC entities via spaCy."""
-    if pd.isna(text) or text == "":
-        return []
-    from preprocessing import nlp
-    ents = []
-    for ent in nlp(text).ents:
-        if ent.label_ in ["PERSON", "ORG", "GPE", "LOC"]:
-            ents.append((ent.text.strip().replace("\n", " "), ent.label_))
-    return list(set(ents))
-
-
-def link_entities_dbpedia(text: Optional[str], confidence: float = 0.5) -> list[dict]:
-    """Link the two rival players to their DBpedia URIs using local keyword matching.
-
-    This replaces the slow DBpedia Spotlight API while preserving the same output schema.
-    """
-    if not text or pd.isna(text) or str(text).strip() == "":
-        return []
-
-    text_lower = text.lower()
-    entities = []
-    if any(k in text_lower for k in SINNER_KEYWORDS):
-        entities.append({"surface_form": "Jannik Sinner", "uri": SINNER_URI})
-    if any(k in text_lower for k in ALCARAZ_KEYWORDS):
-        entities.append({"surface_form": "Carlos Alcaraz", "uri": ALCARAZ_URI})
-    return entities
-
-
-def score_emotions(text: str) -> dict[str, float]:
-    """Score a single text across the 8 NRC emotion categories, returning zeros on empty/invalid input."""
-    try:
-        if not text or pd.isna(text) or str(text).strip() == "":
-            return {e: 0.0 for e in NRC_EMOTIONS}
-    except (TypeError, ValueError):
-        return {e: 0.0 for e in NRC_EMOTIONS}
-
-    try:
-        emotion_obj = NRCLex()
-        emotion_obj.load_raw_text(str(text))
-        freqs = emotion_obj.affect_frequencies
-        return {e: freqs.get(e, 0.0) for e in NRC_EMOTIONS}
-    except Exception:
-        return {e: 0.0 for e in NRC_EMOTIONS}
-
-
-def add_emotion_columns(df: pd.DataFrame, text_col: str = 'cleaned_text', backend: str = "nrc") -> pd.DataFrame:
-    """Add the 8 emotion columns plus a 'dominant_emotion' column to a DataFrame.
-
-    The ``backend`` selects the scoring engine:
-      - "nrc"  : per-post NRCLex affect frequencies (the original behaviour).
-      - "bert" : batched GoEmotions (RoBERTa) inference, with the 28 fine-grained
-                 labels collapsed onto the 8 NRC categories via GOEMOTIONS_TO_NRC.
-
-    Either way the output columns (`emotion_*`, `dominant_emotion`) and the neutral
-    fallback (sum of scores == 0 → 'neutral') are identical. Posts with no detected
-    emotion are labelled 'neutral'.
-    """
-    if backend == "bert":
-        clf = _get_emotion_clf_bert()
-        batch_size = 128
-        emotion_inputs = df[text_col].tolist()
-
-        # Generator to pass to pipeline for parallelized dataloading and batching on GPU
-        def emotion_generator():
-            for t in emotion_inputs:
-                yield t if (isinstance(t, str) and t.strip() != "") else " "
-
-        print(f"[NLP] Running GPU parallelized inference with batch_size={batch_size}...")
-        raw_results = clf(
-            emotion_generator(),
-            batch_size=batch_size,
-            truncation=True,
-            max_length=128,
-        )
-
-        emotion_rows = []
-        dominant_emotions = []
-        for res in tqdm(raw_results, total=len(emotion_inputs), desc="GoEmotions BERT"):
-            scores = {d["label"]: d["score"] for d in res}
-            nrc_scores = {
-                nrc: float(sum(scores.get(g, 0.0) for g in go))
-                for nrc, go in GOEMOTIONS_TO_NRC.items()
-            }
-            emotion_rows.append(nrc_scores)
-            
-            # If the raw max predicted score is 'neutral', classify dominant as 'neutral'
-            raw_max_label = max(scores, key=scores.get)
-            if raw_max_label == "neutral":
-                dominant_emotions.append("neutral")
-            else:
-                dominant_emotions.append(max(nrc_scores, key=nrc_scores.get))
-
-        emotion_df = pd.DataFrame(emotion_rows, index=df.index)
-        emotion_df = emotion_df[NRC_EMOTIONS]
-    else:
-        emotion_df = pd.DataFrame(df[text_col].apply(score_emotions).tolist(), index=df.index)
-
-    emotion_df.columns = [f'emotion_{e}' for e in NRC_EMOTIONS]
-    # Drop any generic emotion columns from a previous backend pass so a second
-    # call (e.g. running both backends) overwrites rather than duplicates them.
-    stale_cols = [c for c in emotion_df.columns if c in df.columns]
-    if 'dominant_emotion' in df.columns:
-        stale_cols.append('dominant_emotion')
-    if stale_cols:
-        df = df.drop(columns=stale_cols)
-    df = pd.concat([df, emotion_df], axis=1)
-
-    if backend == "bert":
-        df['dominant_emotion'] = dominant_emotions
-    else:
-        emotion_cols = list(emotion_df.columns)
-        df['dominant_emotion'] = df[emotion_cols].idxmax(axis=1).str.replace('emotion_', '')
-        df.loc[df[emotion_cols].sum(axis=1) == 0, 'dominant_emotion'] = 'neutral'
-    return df
-
-
-def derive_player_sentiment_scores(df: pd.DataFrame) -> dict[str, list[float]]:
-    """Bucket compound scores per player (Sinner / Alcaraz) using precomputed flags."""
-    sinner_scores = df.loc[df['is_sinner'], 'sentiment_compound'].tolist()
-    alcaraz_scores = df.loc[df['is_alcaraz'], 'sentiment_compound'].tolist()
-    return {"sinner_scores": sinner_scores, "alcaraz_scores": alcaraz_scores}
-
-
-
-def run_nlp_enrichment(df: pd.DataFrame, output_filepath: str = "data/sinner_alcaraz_processed.csv", emotion_backend: str = "both") -> dict:
-    """Enrich crawled posts with cleaned text, RoBERTa sentiment, emotions, NER and entity links.
-
-    Writes the enriched DataFrame to output_filepath and returns it together with
-    per-player sentiment score buckets.
-
-    The ``emotion_backend`` parameter selects the emotion-scoring engine(s):
-      - "nrc"  : NRCLex affect frequencies only.
-      - "bert" : GoEmotions (RoBERTa) only; also aliased to `bert_emotion_*` /
-                 `bert_dominant_emotion` columns.
-      - "both" : (default) run both backends. The generic `emotion_*` /
-                 `dominant_emotion` columns hold the most recently computed
-                 (BERT) backend, and both are additionally preserved under the
-                 `nrc_emotion_*` / `nrc_dominant_emotion` and `bert_emotion_*` /
-                 `bert_dominant_emotion` column families for side-by-side
-                 comparison.
-    """
-    df = df.copy()
-    total_posts = len(df)
-    print(f"[NLP] Starting BERT/RoBERTa NLP enrichment for {total_posts} posts...")
-
-    print("[NLP] Step 1/6: Cleaning and preprocessing post text...")
-    df['cleaned_text'] = df['text'].apply(clean_text)
-    df['preprocessed_text'] = df['text'].apply(preprocess)
-    print("[NLP] Step 1/6 completed.")
-
-    print("[NLP] Step 2/6: Scoring RoBERTa sentiments on GPU...")
-    bert_inputs = df['text'].apply(clean_text_bert).tolist()
-    sentiment_outputs = score_roberta_sentiment(bert_inputs, batch_size=128)
-    df['sentiment_category'] = [item['category'] for item in sentiment_outputs]
-    df['sentiment_compound'] = [item['compound'] for item in sentiment_outputs]
-    print("[NLP] Step 2/6 completed.")
-
-    if emotion_backend == "nrc":
-        print("[NLP] Step 3/6: Running NRC Emotion Lexicon analysis...")
-        df = add_emotion_columns(df, text_col='cleaned_text', backend='nrc')
-        print("[NLP] Step 3/6 completed.")
-    elif emotion_backend == "bert":
-        print("[NLP] Step 3/6: Running GoEmotions BERT emotion analysis...")
-        df = add_emotion_columns(df, text_col='cleaned_text', backend='bert')
-        for e in NRC_EMOTIONS:
-            df[f'bert_emotion_{e}'] = df[f'emotion_{e}']
-        df['bert_dominant_emotion'] = df['dominant_emotion']
-        print("[NLP] Step 3/6 completed.")
-    else:
-        print("[NLP] Step 3/6: Running NRC Emotion Lexicon analysis...")
-        df = add_emotion_columns(df, text_col='cleaned_text', backend='nrc')
-        for e in NRC_EMOTIONS:
-            df[f'nrc_emotion_{e}'] = df[f'emotion_{e}']
-        df['nrc_dominant_emotion'] = df['dominant_emotion']
-        print("[NLP] Step 3/6 completed.")
-
-        print("[NLP] Step 4/6: Running GoEmotions BERT emotion analysis...")
-        df = add_emotion_columns(df, text_col='cleaned_text', backend='bert')
-        for e in NRC_EMOTIONS:
-            df[f'bert_emotion_{e}'] = df[f'emotion_{e}']
-        df['bert_dominant_emotion'] = df['dominant_emotion']
-        print("[NLP] Step 4/6 completed.")
-
-    print("[NLP] Step 5/6: Extracting Named Entities (spaCy NER)...")
-    df['entities'] = df['cleaned_text'].apply(extract_ner)
-    print("[NLP] Step 5/6 completed.")
-
-    print("[NLP] Step 6/6: Linking entities to DBpedia resources...")
-    df['linked_entities'] = df['cleaned_text'].apply(link_entities_dbpedia)
-    print("[NLP] Step 6/6 completed.")
-
-    # Record player flags globally
-    is_sinner_list = []
-    is_alcaraz_list = []
-    for _, row in df.iterrows():
-        is_s, is_a = detect_player_mentions(row['cleaned_text'], row['linked_entities'])
-        is_sinner_list.append(is_s)
-        is_alcaraz_list.append(is_a)
-    df['is_sinner'] = is_sinner_list
-    df['is_alcaraz'] = is_alcaraz_list
-
-    scores = derive_player_sentiment_scores(df)
-
-    df.to_csv(output_filepath, index=False)
-    print(f"[NLP] Saved processed dataset to {output_filepath}")
-    return {"df": df, **scores}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -425,7 +152,7 @@ def plot_emotion_backend_comparison(df: pd.DataFrame, output_dir: str = "plots")
 
     fig = plt.figure(figsize=(12, 6))
     sns.barplot(data=df_plot, x="Emotion", y="Share of posts", hue="Backend")
-    
+
     render_flat_chart(
         fig=fig,
         filename="emotion_backend_comparison.png",
@@ -463,15 +190,15 @@ def plot_sentiment_distribution(df: pd.DataFrame, output_dir: str = "plots") -> 
 
     fig = plt.figure(figsize=(7, 7))
     wedges, texts, autotexts = plt.pie(
-        sizes, 
-        labels=categories, 
-        autopct='%1.1f%%', 
-        startangle=140, 
+        sizes,
+        labels=categories,
+        autopct='%1.1f%%',
+        startangle=140,
         colors=colors,
         pctdistance=0.75,
         textprops=dict(color="black", fontsize=12, weight="bold")
     )
-    
+
     # Add center circle to make it a donut
     centre_circle = plt.Circle((0,0), 0.55, fc='white')
     fig.gca().add_artist(centre_circle)
@@ -533,24 +260,24 @@ def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots", user_s
     alcaraz_trend = alcaraz_trend.sort_index()
 
     fig, ax1 = plt.subplots(figsize=(12, 6))
-    
+
     # 1. Plot Post Volume on a secondary Y-axis (ax2) in the background
     ax2 = ax1.twinx()
-    
+
     sinner_vol = df_sinner.groupby('date')['sentiment'].count() if not df_sinner.empty else pd.Series()
     alcaraz_vol = df_alcaraz.groupby('date')['sentiment'].count() if not df_alcaraz.empty else pd.Series()
-    
+
     sinner_vol = sinner_vol.sort_index()
     alcaraz_vol = alcaraz_vol.sort_index()
-    
+
     vol_label_s = 'Sinner Post Volume'
     vol_label_a = 'Alcaraz Post Volume'
-    
+
     if not sinner_vol.empty:
         ax2.fill_between(sinner_vol.index, sinner_vol.values, alpha=0.12, color='#f39c12', label=vol_label_s)
     if not alcaraz_vol.empty:
         ax2.fill_between(alcaraz_vol.index, alcaraz_vol.values, alpha=0.12, color='#00b4d8', label=vol_label_a)
-        
+
     ax2.set_ylabel("Daily Post Volume (Shaded)", color='gray', fontsize=11, labelpad=10)
     ax2.tick_params(axis='y', labelcolor='gray')
     ax2.grid(False)  # Disable grid lines for secondary axis to avoid clutter
@@ -558,23 +285,23 @@ def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots", user_s
     # 2. Plot Average Sentiment Compound Scores on the primary Y-axis (ax1)
     line_label_s = 'Sinner Sentiment'
     line_label_a = 'Alcaraz Sentiment'
-    
+
     if not sinner_trend.empty:
         ax1.plot(sinner_trend.index, sinner_trend.values, marker='o', linewidth=2.5, color='#d35400', label=line_label_s)
     if not alcaraz_trend.empty:
         ax1.plot(alcaraz_trend.index, alcaraz_trend.values, marker='s', linewidth=2.5, color='#023e8a', label=line_label_a)
 
     ax1.axhline(0, color='gray', linestyle='--', linewidth=1, alpha=0.7)
-    
+
     # Import and annotate US Open 2025 key match events from utils
     from utils import US_OPEN_EVENTS
-    
+
     # Force drawing/scaling so we can read the correct Y limits on the primary axis
     ax1.relim()
     ax1.autoscale_view()
     ymin, ymax = ax1.get_ylim()
     text_y = ymax - (ymax - ymin) * 0.08
-    
+
     for date_str, label, color in US_OPEN_EVENTS:
         try:
             event_date = pd.to_datetime(date_str).date()
@@ -598,19 +325,19 @@ def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots", user_s
                   "(Daily Avg RoBERTa Sentiment vs. Post Volume by Fanbase Leaning)" if use_fanbase else
                   "Sentiment Trajectory & Post Volume Over Time (US Open 2025)\n"
                   "(Daily Avg RoBERTa Sentiment vs. Post Volume)")
-    
+
     ax1.set_xlabel("Date", fontsize=11, labelpad=10)
     ax1.set_ylabel("Average Sentiment Compound Score (Lines)", fontsize=11, labelpad=10)
     ax1.grid(True, linestyle=':', alpha=0.6)
-    
+
     # Combine legends from both axes
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
     # Place legend horizontally below the plot to avoid overlapping any lines or event labels
     ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper center', bbox_to_anchor=(0.5, -0.2), ncol=4, fontsize=10)
-    
+
     fig.autofmt_xdate()
-    
+
     render_flat_chart(
         fig=fig,
         filename="sentiment_over_time.png",
@@ -619,7 +346,3 @@ def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots", user_s
         title_weight="bold",
         title_pad=15,
     )
-
-
-
-

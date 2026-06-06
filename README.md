@@ -65,44 +65,45 @@ project_root\
 
 ## ⚙️ System Architecture & Data Flow
 
+The pipeline is a **strict Directed Acyclic Graph (DAG)** of stages. Each stage reads
+only the artifact(s) produced by an upstream stage and writes its own; nothing
+downstream recomputes what an upstream stage owns. The **preprocessing stage is the
+single owner of all enrichment** (cleaning, NER/NED, NRC + GoEmotions(BERT) emotion
+scoring, RoBERTa sentiment, post/user stance scoring and the Sinner-vs-Alcaraz fan
+distinction). It writes the **frozen** `data/sinner_alcaraz_processed.csv`, which is
+the single source of truth — downstream stages only read it.
+
 ```mermaid
 graph TD
     A[Bluesky API / AT Protocol] -->|Crawler: sinner OR alcaraz| B(src/crawler.py)
-    B -->|Saves Raw CSV| C[data/sinner_alcaraz_posts.csv]
-    
-    C --> D(Pipeline: main.py)
-    
-    subgraph Pipeline [main.py Pipeline Steps]
-        D -->|Step 1: NLP Enrichment| E(src/nlp_analysis.py)
-        E -->|VADER & NRC Lexicon| E1[Sentiment & Emotion Scoring]
-        E -->|spaCy NER & DBpedia Spotlight| E2[Entity Recognition & Linking]
-        E1 & E2 -->|Enriched CSV| F[data/sinner_alcaraz_processed.csv]
-        
-        F -->|Step 2: Graph Modelling| G(src/network_analysis.py)
-        G -->|Replies & Mentions| G1[Build Undirected G & Directed Gd Graphs]
-        G1 -->|Centrality Analysis| G2[Compute Closeness, Betweenness, Degree, PageRank]
-        G1 -->|Community Benchmarking| G3[Louvain, Leiden, Infomap, LPA, Fluid]
-        G2 & G3 -->|SNA Metrics CSV| H[data/network_centrality_metrics.csv]
-        
-        H -->|Step 3: Attitudinal Evaluation| I[Kruskal-Wallis Community Sentiment Polarization]
-        I -->|Step 4: Stance Propagation| J(src/stance_propagation.py)
-        J -->|Laplacian Smoothing| J1[Classify Leaning: Sinner vs Alcaraz vs Neutral]
-        J1 -->|Update Metrics CSV| K[data/network_centrality_metrics.csv]
-        
-        K -->|Step 5: Visualizations| L(src/visualization.py)
-        L -->|Matplotlib / Seaborn| L1[Generate 13 Figures in plots/ & report/]
-        
-        K -->|Step 6: Export Dashboard JSON| M(src/export_dashboard_data.py)
-        M -->|Compile Graph & Profiles| N[web/data/dashboard_data.json]
-    end
-    
-    N --> O((Interactive Web Dashboard))
-    L1 --> P((LaTeX Report Compilation))
-    
-    style Pipeline fill:#1a1c23,stroke:#34495e,stroke-width:2px;
-    style O fill:#2c3e50,stroke:#3498db,stroke-width:2px;
-    style P fill:#2c3e50,stroke:#1abc9c,stroke-width:2px;
+    B -->|"[1] Saves Raw CSV"| C[data/sinner_alcaraz_posts.csv]
+
+    C -->|"[2] Preprocess / Enrich"| D(src/preprocessing.py)
+    D -->|spaCy NER + DBpedia keyword linking| D1[Entity Recognition & Linking]
+    D -->|NRCLex + GoEmotions BERT| D2[Emotion Scoring]
+    D -->|CardiffNLP RoBERTa| D3[Sentiment + Post/User Stance & Fanbase]
+    D1 & D2 & D3 -->|FROZEN processed CSV| E[data/sinner_alcaraz_processed.csv]
+
+    E -->|"[3] Network"| F(src/social_network_analysis.py)
+    F -->|Replies & Mentions| F1[Undirected G & Directed Gd]
+    F1 -->|Centrality| F2[Degree, Closeness, Betweenness, PageRank]
+    F1 -->|Communities| F3[Louvain + Infomap]
+    F2 & F3 --> G[network_centrality_metrics.csv / network_global_metrics.csv / network_*.png]
+
+    E --> H(["[4] src/social_sentiment_analysis.py"])
+    G --> H
+    H -->|Matplotlib / Seaborn| H1[sentiment_*.png, community_emotion_*.png]
+
+    E --> I(["[5] src/social_stance_analysis.py"])
+    G --> I
+    I -->|Aggregation + Polarization + Fanbase study| I1[stance_*.png, fanbase_*.png]
+
+    style E fill:#2c3e50,stroke:#1abc9c,stroke-width:2px;
 ```
+
+Stages [2]–[5] are orchestrated in order by `main.py` (`stage_preprocess` →
+`stage_network` → `stage_stance` → `stage_sentiment`); each is independently runnable
+when its inputs exist, and the processed-CSV cache is reused if present.
 
 ---
 
