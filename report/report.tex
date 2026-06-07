@@ -196,8 +196,43 @@ deviation of net stance.
 
 \section{Results}
 
-\subsection{Network structure: directed vs.\ undirected}
+\subsection{Social Network Analysis}
 \label{sec:netresults}
+
+The interaction graph is \textbf{sparse but strongly modular}. 
+
+Out of 2{,}296 active users in the dataset, 683 engaged in interactions (replies or mentions) 
+and form the nodes of our interaction network, while the remaining 1{,}613 users posted standalone 
+content without direct interactive links. Global metrics (Table~\ref{tab:global}) 
+computed on this interactive subset report a density of $\approx 0.002$ for the undirected graph 
+and $\approx 0.001$ for the directed graph. Modularity scores are extremely high (Louvain $\approx 0.97$, 
+Infomap $\approx 0.94$), suggesting communities cluster tightly around neutral-news-hub users rather than mixing. 
+The giant connected component (GCC/WCC) spans only \textbf{111 users ($\approx$16.3\% of the interaction network)}, 
+indicating that much of the interactive conversation happens in small, loosely linked clusters. 
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcc}
+\toprule
+Metric & Undirected ($G_u$) & Directed ($G_d$) \\
+\midrule
+Nodes & 683 & 683 \\
+Edges & 472 & 491 \\
+Density & 0.00203 & 0.00105 \\
+Transitivity & 0.02022 & 0.01282 \\
+Average clustering & 0.01120 & 0.00798 \\
+GCC / WCC size & 111 & 111 \\
+GCC / WCC fraction of users & 16.25\% & 16.25\% \\
+SCC size & --- & 7 \\
+SCC fraction of users & --- & 1.03\% \\
+Louvain modularity & 0.9666 & --- \\
+Infomap modularity & --- & 0.9437 \\
+\bottomrule
+\end{tabular}
+\caption{Graph-level metrics for undirected ($G_u$) and directed ($G_d$) representations (\texttt{data/network\_global\_metrics.csv}).}
+\label{tab:global}
+\end{table}
+
 
 We first compare the two community partitions: Louvain on the undirected graph $G_u$
 (modularity $Q = 0.967$) and Infomap on the directed graph $G_d$ (projected modularity
@@ -265,13 +300,13 @@ non-affective content, with positive posts outnumbering negative ones by roughly
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.55\textwidth]{sentiment_distribution.png}
+\includegraphics[width=0.35\textwidth]{sentiment_distribution.png}
 \caption{Overall sentiment distribution (RoBERTa): 77.2\% neutral, 16.2\% positive, 6.6\%
 negative.}
 \label{fig:sentdist}
 \end{figure}
 
-\subsection{Emotion analysis: NRC lexicon vs.\ GoEmotions (BERT)}
+\subsection{Social Sentiment Analysis}
 \label{sec:emoresults}
 
 Comparing the two emotion backends exposes a decisive advantage of the transformer model
@@ -332,7 +367,7 @@ PageRank prestige.}
 \label{fig:netemotion}
 \end{figure}
 
-\subsection{Stance and fanbase analysis}
+\subsection{Social Stance Analysis}
 \label{sec:stanceresults}
 
 Fusing sentiment, mention frequency and emotion into the user-level net stance
