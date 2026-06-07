@@ -12,12 +12,12 @@ load_dotenv()
 
 
 def create_client() -> Client:
-    """Validate Bluesky credentials from the environment and return a logged-in client."""
+    """Validate Bluesky credentials from the environment and return a logged-in client"""
     handle = os.environ.get("BSKY_HANDLE")
     app_password = os.environ.get("BSKY_APP_PASSWORD")
     if not handle or not app_password:
         raise EnvironmentError(
-            "Missing Bluesky credentials. "
+            "Missing Bluesky credentials"
             "Set BSKY_HANDLE and BSKY_APP_PASSWORD as environment variables "
             "or create a .env file. See .env.example for the required format."
         )
@@ -28,7 +28,7 @@ def create_client() -> Client:
 
 
 def _parse_dt_utc(iso_str: str) -> datetime:
-    """Parse an ISO datetime string into a timezone-aware UTC datetime."""
+    """Parse an ISO datetime string into a timezone-aware UTC datetime"""
     dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
@@ -36,12 +36,12 @@ def _parse_dt_utc(iso_str: str) -> datetime:
 
 
 def _now_utc_ts() -> int:
-    """Return the current UTC time as a Unix timestamp."""
+    """Return the current UTC time as a Unix timestamp"""
     return int(datetime.now(timezone.utc).timestamp())
 
 
 def call_with_retries(callable_fn: Callable, *args: Any, max_retries: int = 10, **kwargs: Any) -> Any:
-    """Call an atproto function with retries, honouring 429 rate-limit headers and exponential backoff."""
+    """Call an atproto function with retries, honouring 429 rate-limit headers and exponential backoff"""
     for attempt in range(max_retries):
         try:
             return callable_fn(*args, **kwargs)
@@ -67,11 +67,11 @@ def call_with_retries(callable_fn: Callable, *args: Any, max_retries: int = 10, 
             print(f"[{status}] request failed, sleeping {wait_s}s (attempt {attempt+1}/{max_retries})")
             time.sleep(wait_s)
 
-    raise RuntimeError("Too many retries / repeated failures.")
+    raise RuntimeError("Too many retries / repeated failures")
 
 
 def extract_facets(record: Any) -> dict:
-    """Extract hashtags, mentions and links from a post record's richtext facets."""
+    """Extract hashtags, mentions and links from a post record's richtext facets"""
     hashtags: list[str] = []
     mentions: list[dict] = []
     links: list[str] = []
@@ -96,7 +96,7 @@ def extract_facets(record: Any) -> dict:
 
 
 def get_reply_details(record: Any) -> dict:
-    """Extract reply parent/root URIs and the parent author's DID (parsed from the AT URI)."""
+    """Extract reply parent/root URIs and the parent author's DID (parsed from the AT URI)"""
     reply = getattr(record, "reply", None)
     parent_uri = root_uri = parent_author_did = None
 
@@ -125,7 +125,7 @@ def search_posts_time_window(
     polite_sleep: float = 0.25,
     print_every_page: bool = True,
 ) -> pd.DataFrame:
-    """Collect up to max_posts posts within [since_iso, until_iso) using cursor pagination."""
+    """Collect up to max_posts posts within [since_iso, until_iso) using cursor pagination"""
     cursor = None
     rows = []
     page = 0
@@ -208,7 +208,7 @@ def search_posts_day_by_day(
     page_size: int = 100,
     polite_sleep: float = 0.25,
 ) -> pd.DataFrame:
-    """Collect posts by slicing the timeframe into 24h windows to bypass pagination limits."""
+    """Collect posts by slicing the timeframe into 24h windows to bypass pagination limits"""
     since_dt = _parse_dt_utc(since_iso)
     until_dt = _parse_dt_utc(until_iso)
 
@@ -233,10 +233,10 @@ def search_posts_day_by_day(
         )
 
         if not df_day.empty:
-            print(f"     Found {len(df_day)} matching posts for this day.")
+            print(f"     Found {len(df_day)} matching posts for this day")
             all_dfs.append(df_day)
         else:
-            print("     No matching posts found for this day.")
+            print("     No matching posts found for this day")
 
         current_dt = next_dt
 
@@ -292,4 +292,4 @@ if __name__ == "__main__":
         df_all.to_csv(output_file, index=False)
         print(f"Successfully saved crawled posts to: {output_file}")
     else:
-        print("\nNo posts found across any queries. Verify credentials, query terms, or search time windows.")
+        print("\nNo posts found")
