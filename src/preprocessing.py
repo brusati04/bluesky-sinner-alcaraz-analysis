@@ -147,8 +147,8 @@ GOEMOTIONS_TO_NRC = {
 
 # NOTE: the stance-weight and polarity groupings below are scaffolding for a
 # multi-signal stance score that the current pipeline does not yet compute.
-POSITIVE_EMOTIONS = ["emotion_joy", "emotion_trust", "emotion_anticipation"]
-NEGATIVE_EMOTIONS = ["emotion_anger", "emotion_disgust", "emotion_sadness", "emotion_fear"]
+POSITIVE_EMOTIONS = ["bert_emotion_joy", "bert_emotion_trust", "bert_emotion_anticipation"]
+NEGATIVE_EMOTIONS = ["bert_emotion_anger", "bert_emotion_disgust", "bert_emotion_sadness", "bert_emotion_fear"]
 W_SENTIMENT = 0.50
 W_EMOTION = 0.35
 W_FREQUENCY = 0.15
@@ -463,9 +463,9 @@ def detect_players(df: pd.DataFrame) -> pd.DataFrame:
 
 def compute_post_stances(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Add stance_sinner / stance_alcaraz columns.
-    - Single-mention posts: full RoBERTa compound assigned to that player
-    - Dual-mention posts: sentence-level sentiment split
+    Add stance_sinner / stance_alcaraz and emotion_sinner / emotion_alcaraz columns.
+    - Single-mention posts: full RoBERTa compound and net GoEmotions score assigned to that player
+    - Dual-mention posts: sentence-level sentiment split for sentiment, 50/50 split for emotion
     - No-mention posts: 0 for both
     """
     compound = df['sentiment_compound'].fillna(0)
@@ -477,9 +477,20 @@ def compute_post_stances(df: pd.DataFrame) -> pd.DataFrame:
 
     df['stance_sinner'] = 0.0
     df['stance_alcaraz'] = 0.0
+    df['emotion_sinner'] = 0.0
+    df['emotion_alcaraz'] = 0.0
+
+    # Calculate post-level net GoEmotions score
+    pos_sum = df[POSITIVE_EMOTIONS].sum(axis=1)
+    neg_sum = df[NEGATIVE_EMOTIONS].sum(axis=1)
+    net_emotion = pos_sum - neg_sum
 
     df.loc[single_sinner, 'stance_sinner'] = compound[single_sinner]
     df.loc[single_alcaraz, 'stance_alcaraz'] = compound[single_alcaraz]
+    df.loc[single_sinner, 'emotion_sinner'] = net_emotion[single_sinner]
+    df.loc[single_alcaraz, 'emotion_alcaraz'] = net_emotion[single_alcaraz]
+    df.loc[both_players, 'emotion_sinner'] = net_emotion[both_players] * 0.5
+    df.loc[both_players, 'emotion_alcaraz'] = net_emotion[both_players] * 0.5
 
     if both_players.any():
         if DEBUG:
@@ -555,12 +566,20 @@ def compute_post_stances(df: pd.DataFrame) -> pd.DataFrame:
 
 def compute_user_stances(df: pd.DataFrame, min_posts: int = MIN_POSTS_FOR_STANCE) -> pd.DataFrame:
     """
-    Aggregate per author: mean stance scores, frequencies, and net stance.
+    Aggregate per author: mean stance scores, frequencies, net emotion scores, and net stance.
     """
+    df = df.copy()
+    if 'emotion_sinner' not in df.columns:
+        df['emotion_sinner'] = 0.0
+    if 'emotion_alcaraz' not in df.columns:
+        df['emotion_alcaraz'] = 0.0
+
     grouped = df.groupby('author_handle')
     user_stances = grouped.agg(
         mean_sinner=('stance_sinner', 'mean'),
         mean_alcaraz=('stance_alcaraz', 'mean'),
+        mean_emo_sinner=('emotion_sinner', 'mean'),
+        mean_emo_alcaraz=('emotion_alcaraz', 'mean'),
         n_sinner=('is_sinner', 'sum'),
         n_alcaraz=('is_alcaraz', 'sum'),
         post_count=('stance_sinner', 'count')
@@ -571,7 +590,7 @@ def compute_user_stances(df: pd.DataFrame, min_posts: int = MIN_POSTS_FOR_STANCE
     if DEBUG:
         print(f"\n[STANCE] User filtering: {total_users_before} -> {len(user_stances)} users (min {min_posts} posts)")
 
-    user_stances[['mean_sinner', 'mean_alcaraz']] = user_stances[['mean_sinner', 'mean_alcaraz']].fillna(0.0)
+    user_stances[['mean_sinner', 'mean_alcaraz', 'mean_emo_sinner', 'mean_emo_alcaraz']] = user_stances[['mean_sinner', 'mean_alcaraz', 'mean_emo_sinner', 'mean_emo_alcaraz']].fillna(0.0)
 
     total_mentions = user_stances['n_sinner'] + user_stances['n_alcaraz']
     user_stances['freq_sinner'] = (user_stances['n_sinner'] / total_mentions.replace(0, np.nan)).fillna(0)
@@ -580,6 +599,7 @@ def compute_user_stances(df: pd.DataFrame, min_posts: int = MIN_POSTS_FOR_STANCE
     user_stances['net_stance'] = (
         W_SENTIMENT * (user_stances['mean_sinner'] - user_stances['mean_alcaraz'])
         + W_FREQUENCY * (user_stances['freq_sinner'] - user_stances['freq_alcaraz'])
+        + W_EMOTION * (user_stances['mean_emo_sinner'] - user_stances['mean_emo_alcaraz'])
     )
 
     if DEBUG:
@@ -630,32 +650,29 @@ def prepare_dataset(raw_filepath: str, processed_filepath: str) -> tuple[Optiona
         df = run_nlp_enrichment(raw_df, output_filepath=processed_filepath)["df"]
 
     if df is not None:
-        # Enforce all Phase 1 stance & dominant emotion computations are present
-        cols_to_check = ['author_stance_score', 'author_stance_leaning', 'author_dominant_emotion_nrc', 'author_dominant_emotion_bert']
-        if not all(col in df.columns for col in cols_to_check):
-            print("[INFO] Adding stance and dominant emotion columns to processed dataset...")
+        print("[INFO] Recalculating stance and dominant emotion columns to processed dataset...")
 
-            # Post stance
-            df = compute_post_stances(df)
-            # User stance
-            user_stances = compute_user_stances(df, min_posts=1)
-            user_stances = classify_stances(user_stances, threshold=0.05)
+        # Post stance
+        df = compute_post_stances(df)
+        # User stance
+        user_stances = compute_user_stances(df, min_posts=1)
+        user_stances = classify_stances(user_stances, threshold=0.05)
+        
+        # Map back to posts DataFrame
+        df['author_stance_score'] = df['author_handle'].map(user_stances['net_stance']).fillna(0.0)
+        df['author_stance_leaning'] = df['author_handle'].map(user_stances['stance_leaning']).fillna('neutral')
+        
+        # Map user dominant emotion back to df
+        for backend in ("nrc", "bert"):
+            col = "nrc_dominant_emotion" if backend == "nrc" else "bert_dominant_emotion"
+            user_emotions = df.groupby("author_handle")[col].agg(
+                lambda s: s.mode().iloc[0] if not s.mode().empty else "neutral"
+            ).to_dict()
+            df[f'author_dominant_emotion_{backend}'] = df['author_handle'].map(user_emotions).fillna("neutral")
             
-            # Map back to posts DataFrame
-            df['author_stance_score'] = df['author_handle'].map(user_stances['net_stance']).fillna(0.0)
-            df['author_stance_leaning'] = df['author_handle'].map(user_stances['stance_leaning']).fillna('neutral')
-            
-            # Map user dominant emotion back to df
-            for backend in ("nrc", "bert"):
-                col = "nrc_dominant_emotion" if backend == "nrc" else "bert_dominant_emotion"
-                user_emotions = df.groupby("author_handle")[col].agg(
-                    lambda s: s.mode().iloc[0] if not s.mode().empty else "neutral"
-                ).to_dict()
-                df[f'author_dominant_emotion_{backend}'] = df['author_handle'].map(user_emotions).fillna("neutral")
-                
-            # Overwrite the cache file with completed dataset
-            df.to_csv(processed_filepath, index=False)
-            print(f"[INFO] Processed dataset cache updated at {processed_filepath}")
+        # Overwrite the cache file with completed dataset
+        df.to_csv(processed_filepath, index=False)
+        print(f"[INFO] Processed dataset cache updated at {processed_filepath}")
             
     return df, did_to_handle
 

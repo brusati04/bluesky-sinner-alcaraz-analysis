@@ -34,8 +34,7 @@ from social_sentiment_analysis import (plot_community_emotion_profiles,
                                       plot_sentiment_distribution,
                                       plot_sentiment_over_time,
                                       plot_emotion_backend_comparison)
-from social_stance_analysis import (run_stance_propagation,
-                                    print_community_196_posts)
+from social_stance_analysis import (run_stance_propagation)
 
 
 RAW_DATA_PATH = "data/sinner_alcaraz_posts.csv"

@@ -164,16 +164,16 @@ analysis.
 \label{sec:stancemethod}
 
 Post-level stance assigns the RoBERTa compound score to the mentioned player for single-mention
-posts; dual-mention posts are split via sentence-level sentiment. User-level net stance fuses
-mean sentiment with mention frequency:
+posts; dual-mention posts are split via sentence-level sentiment. Similarly, post-level emotion stance assigns the net GoEmotions (BERT) emotion valence (the sum of positive emotions: joy, trust, and anticipation, minus the sum of negative emotions: anger, disgust, sadness, and fear) to the mentioned player.
+User-level net stance fuses mean sentiment, mention frequency, and mean emotion stance:
 
 \[
 \text{net\_stance} = 0.50\,(\text{mean}_\text{sinner} - \text{mean}_\text{alcaraz})
                    + 0.15\,(\text{freq}_\text{sinner} - \text{freq}_\text{alcaraz})
+                   + 0.35\,(\text{mean\_emo}_\text{sinner} - \text{mean\_emo}_\text{alcaraz})
 \]
 
-(the remaining $0.35$ weight is reserved for a future emotion-based component). Users are
-labelled \texttt{sinner} / \texttt{alcaraz} / \texttt{neutral} with a $\pm 0.05$ threshold.
+Users are labelled \texttt{sinner} / \texttt{alcaraz} / \texttt{neutral} with a $\pm 0.05$ threshold.
 Polarisation is measured via stance assortativity, the cross-stance edge ratio, and the standard
 deviation of net stance.
 
@@ -317,11 +317,11 @@ clusters; negative emotions stay low.}
 \subsection{Stance \& polarisation}
 
 The four-panel stance summary (Figure~\ref{fig:stancesummary}) gives the headline picture. Of
-\textbf{2{,}296 analysed users}, most are \textbf{neutral (1{,}080)}, followed by
-\textbf{Alcaraz (818)} and \textbf{Sinner (398)}---a tilt towards Alcaraz consistent with his
-final victory. Net stance scores are tightly concentrated around zero (score SD $= 0.227$), and
+\textbf{2{,}296 analysed users}, most are \textbf{neutral (1{,}035)}, followed by
+\textbf{Alcaraz (835)} and \textbf{Sinner (426)}---a tilt towards Alcaraz consistent with his
+final victory. Net stance scores are tightly concentrated around zero (score SD $= 0.327$), and
 the polarisation diagnostics are mild: stance assortativity is slightly \emph{negative}
-($-0.047$) and the cross-stance edge ratio is $0.108$. In other words, despite the high
+($-0.071$) and the cross-stance edge ratio is $0.147$. In other words, despite the high
 \emph{structural} modularity of the graph, users are \emph{not} strongly segregated by stance---
 fans of opposing players still interact (often via shared news hubs), so this is not a classic
 echo chamber.
@@ -329,18 +329,18 @@ echo chamber.
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.95\textwidth]{stance_analysis_summary.png}
-\caption{Stance analysis summary. Top-left: user stance counts (neutral 1080, Alcaraz 818,
-Sinner 398). Top-right: net-stance score histogram with $\pm0.05$ thresholds. Bottom-left:
-mean stance of top communities. Bottom-right: polarisation metrics (assortativity $-0.047$,
-cross-stance edge ratio $0.108$, score SD $0.227$).}
+\caption{Stance analysis summary. Top-left: user stance counts (neutral 1035, Alcaraz 835,
+Sinner 426). Top-right: net-stance score histogram with $\pm0.05$ thresholds. Bottom-left:
+mean stance of top communities. Bottom-right: polarisation metrics (assortativity $-0.071$,
+cross-stance edge ratio $0.147$, score SD $0.327$).}
 \label{fig:stancesummary}
 \end{figure}
 
 \paragraph{Sentiment-aware vs.\ frequency baseline.}
 Figure~\ref{fig:fanbasecmp} contrasts a frequency-only baseline with the refined,
-sentiment-aware leaning. Folding RoBERTa sentiment into the stance moves users between classes:
-the Sinner camp shrinks from \textbf{454 to 398}, Alcaraz edges up from \textbf{814 to 818}, and
-neutral grows from \textbf{1{,}028 to 1{,}080}. The reclassified users are typically those who
+sentiment-aware leaning. Folding RoBERTa sentiment and GoEmotions sentiment into the stance moves users between classes:
+the Sinner camp shrinks from \textbf{454 to 426}, Alcaraz edges up from \textbf{814 to 835}, and
+neutral grows from \textbf{1{,}028 to 1{,}035}. The reclassified users are typically those who
 \emph{mention} a player frequently but \emph{express} sentiment inconsistent with that mention
 pattern (e.g.\ criticising the player they name most)---exactly the cases a raw mention count
 mislabels. This demonstrates the value of fusing sentiment with frequency rather than counting
@@ -407,9 +407,8 @@ community:
     without the chosen keywords are missed.
     \item \textbf{Sarcasm \& irony.} RoBERTa sentiment can misread sarcastic praise/criticism;
     sarcasm detection is a natural extension.
-    \item \textbf{Weight calibration.} The stance weights ($0.50$, $0.15$, with $0.35$ reserved)
-    are heuristic; a data-driven fit against labelled stances would improve accuracy and let the
-    reserved emotion component be activated.
+    \item \textbf{Weight calibration.} The stance weights ($0.50$ sentiment, $0.15$ frequency, and $0.35$ emotion)
+    are heuristic; a data-driven fit against labelled stances would improve accuracy and optimize weight distribution.
     \item \textbf{Static communities.} Community detection is computed once over the whole window;
     a temporal (sliding-window) analysis could reveal how clusters form and dissolve around
     matches.
@@ -417,7 +416,7 @@ community:
 
 \subsection{Conclusion}
 
-To give a clear answer to our initial question: the Sinner and Alcaraz fan communities on Bluesky manifest through a dual landscape characterized by structural fragmentation and emotional cohesion. Structurally, the interaction network is sparse (density $\approx 0.002$) but highly modular ($Q \approx 0.97$), meaning fans cluster in separate discussion groups. However, this division is not driven by partisan echo chambers: stance assortativity is near zero ($-0.047$), and users primarily cluster around central, neutral sports news hubs which act as bridges between rival fan groups. Emotionally, the discourse is predominantly civil and positive, with neutral and encouraging posts vastly outnumbering hostile ones. This emotional response is highly event-driven, as codebase fanbase sentiment trajectories directly react to and diverge around key match outcomes like the tournament final. Lastly, our study demonstrates that a sentiment-aware stance classifier is methodologically essential to correctly identify user leanings compared to raw mention frequencies.
+To give a clear answer to our initial question: the Sinner and Alcaraz fan communities on Bluesky manifest through a dual landscape characterized by structural fragmentation and emotional cohesion. Structurally, the interaction network is sparse (density $\approx 0.002$) but highly modular ($Q \approx 0.97$), meaning fans cluster in separate discussion groups. However, this division is not driven by partisan echo chambers: stance assortativity is near zero ($-0.071$), and users primarily cluster around central, neutral sports news hubs which act as bridges between rival fan groups. Emotionally, the discourse is predominantly civil and positive, with neutral and encouraging posts vastly outnumbering hostile ones. This emotional response is highly event-driven, as codebase fanbase sentiment trajectories directly react to and diverge around key match outcomes like the tournament final. Lastly, our study demonstrates that a sentiment-aware stance classifier is methodologically essential to correctly identify user leanings compared to raw mention frequencies.
 
 By integrating social-network analysis, NLP-based sentiment/emotion mining and sentiment-aware
 stance detection, this project characterises the Bluesky discourse around the Sinner--Alcaraz

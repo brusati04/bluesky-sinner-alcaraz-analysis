@@ -406,6 +406,10 @@ def synthetic_polarization_test():
     # Assign stance scores (simplified for synthetic test)
     df_synth.loc[df_synth['is_sinner'] & ~df_synth['is_alcaraz'], 'stance_sinner'] = df_synth['sentiment_compound']
     df_synth.loc[df_synth['is_alcaraz'] & ~df_synth['is_sinner'], 'stance_alcaraz'] = df_synth['sentiment_compound']
+    df_synth['emotion_sinner'] = 0.0
+    df_synth['emotion_alcaraz'] = 0.0
+    df_synth.loc[df_synth['is_sinner'] & ~df_synth['is_alcaraz'], 'emotion_sinner'] = df_synth['sentiment_compound']
+    df_synth.loc[df_synth['is_alcaraz'] & ~df_synth['is_sinner'], 'emotion_alcaraz'] = df_synth['sentiment_compound']
     
     user_synth = compute_user_stances(df_synth, min_posts=1)
     user_synth = classify_stances(user_synth, threshold=0.05)
