@@ -54,7 +54,9 @@ This report explores how the tennis rivalry between \textbf{Jannik Sinner} and \
 
 The goal of this project is to \textbf{characterise the online discourse} surrounding two of
 tennis's biggest rivals---Jannik Sinner and Carlos Alcaraz---on the Bluesky social platform
-during the 2025 US Open. Concretely the analysis aims to:
+during the 2025 US Open. In doing so, this study is guided by the following overarching \textbf{research question}: 
+\emph{How do the Jannik Sinner and Carlos Alcaraz fan communities on Bluesky manifest at both a structural-topological and emotional level during a Grand Slam tournament like the US Open?} 
+To address this research question, we build a modular, reproducible NLP and social-network analysis pipeline. Concretely, the analysis aims to:
 
 \begin{itemize}
     \item \textbf{Describe} the social-network structure built from replies and mentions,
@@ -413,11 +415,11 @@ community:
 
 \subsection{Conclusion}
 
+To give a clear answer to our initial question: the Sinner and Alcaraz fan communities on Bluesky manifest through a dual landscape characterized by structural fragmentation and emotional cohesion. Structurally, the interaction network is sparse (density $\approx 0.002$) but highly modular ($Q \approx 0.97$), meaning fans cluster in separate discussion groups. However, this division is not driven by partisan echo chambers: stance assortativity is near zero ($-0.047$), and users primarily cluster around central, neutral sports news hubs which act as bridges between rival fan groups. Emotionally, the discourse is predominantly civil and positive, with neutral and encouraging posts vastly outnumbering hostile ones. This emotional response is highly event-driven, as codebase fanbase sentiment trajectories directly react to and diverge around key match outcomes like the tournament final. Lastly, our study demonstrates that a sentiment-aware stance classifier is methodologically essential to correctly identify user leanings compared to raw mention frequencies.
+
 By integrating social-network analysis, NLP-based sentiment/emotion mining and sentiment-aware
 stance detection, this project characterises the Bluesky discourse around the Sinner--Alcaraz
-rivalry at the 2025 US Open. The community is sparse and highly modular yet not opinion-segregated,
-its tone is neutral-to-positive, its sentiment tracks match outcomes, and a sentiment-aware
-stance classifier improves on a naive frequency baseline. The pipeline is modular and
+rivalry at the 2025 US Open. The pipeline is modular and
 reproducible, and readily adapts to other rivalries or platforms.
 
 \end{document}

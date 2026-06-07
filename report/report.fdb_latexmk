@@ -1,5 +1,5 @@
 # Fdb version 4
-["pdflatex"] 1780824041.72411 "c:/Users/loryb/Desktop/Project/bluesky-sinner-alcaraz-analysis/report/report.tex" "report.pdf" "report" 1780824045.8939 0
+["pdflatex"] 1780824930.24179 "c:/Users/loryb/Desktop/Project/bluesky-sinner-alcaraz-analysis/report/report.tex" "report.pdf" "report" 1780824934.43059 0
   "C:/Users/loryb/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map" 1780765076 220889 b633cf45c7eed4eadae3f50154bdaacb ""
   "C:/Users/loryb/AppData/Local/MiKTeX/fonts/pk/ljfour/jknappen/ec/dpi600/ecbx1095.pk" 1780765086 28976 957d778b01fb2af58cc5df7e5d0a5377 ""
   "C:/Users/loryb/AppData/Local/MiKTeX/fonts/pk/ljfour/jknappen/ec/dpi600/ecbx1200.pk" 1780765082 31952 18ed4446d1d677e77c34360d44e46a9f ""
@@ -111,7 +111,7 @@
   "C:/Users/loryb/AppData/Local/Programs/MiKTeX/tex/latex/rerunfilecheck/rerunfilecheck.sty" 1751104012 9684 a33a14b82ce60d6e77cb9be689d79ee6 ""
   "C:/Users/loryb/AppData/Local/Programs/MiKTeX/tex/latex/url/url.sty" 1388490452 12796 8edb7d69a20b857904dd0ea757c14ec9 ""
   "C:/Users/loryb/AppData/Local/Programs/MiKTeX/tex/latex/xcolor/xcolor.sty" 1729265222 55384 b454dec21c2d9f45ec0b793f0995b992 ""
-  "c:/Users/loryb/Desktop/Project/bluesky-sinner-alcaraz-analysis/report/report.tex" 1780824039 19843 abf67182c04af09fd230e35a4b79b19f ""
+  "c:/Users/loryb/Desktop/Project/bluesky-sinner-alcaraz-analysis/report/report.tex" 1780824925 21089 9ad47a869923fc47460299b82374f2e7 ""
   "community_emotion_Infomap_bert.png" 1780822834 171879 cc5daddaf3ea4e1ac73546c87840ebcc ""
   "community_emotion_Louvain_nrc.png" 1780822832 170241 1eddf75d86c15576e5fda759b9062bfe ""
   "community_wordcloud.png" 1780822836 1667429 4081b598ebf7017cdcc4bb11ffd6421a ""
@@ -120,10 +120,10 @@
   "filtered/network_graph.png" 1780822804 413682 4315e42e8ddb4bc3f8bb3db12442b766 ""
   "filtered/network_graph_directed_fanbase.png" 1780822830 336627 bbe2827c3fac837474412018b3f6cf94 ""
   "filtered/network_graph_fanbase.png" 1780822829 438764 dc9a119f3ff78c2a2ded61e4585ff90d ""
-  "report.aux" 1780824045 8481 f2f2e3cc0dbdc0da81ecb1425fc90113 "pdflatex"
-  "report.out" 1780824045 2368 7db638f748974321f0a82fa614d53d4b "pdflatex"
-  "report.tex" 1780824039 19843 abf67182c04af09fd230e35a4b79b19f ""
-  "report.toc" 1780824045 1775 1248d29b5b1f3fa6ec085af85275707c "pdflatex"
+  "report.aux" 1780824934 8481 cfa22c67b3304f6098cc895191e488e0 "pdflatex"
+  "report.out" 1780824934 2368 7db638f748974321f0a82fa614d53d4b "pdflatex"
+  "report.tex" 1780824925 21089 9ad47a869923fc47460299b82374f2e7 ""
+  "report.toc" 1780824934 1775 38df4845be97482da4559d1bc8d76b42 "pdflatex"
   "sentiment_distribution.png" 1780822834 132860 13bd976f3b2d0e919395d418107c95af ""
   "sentiment_over_time.png" 1780822835 585586 3936a82b95ecf45cc05e9d5b9159384f ""
   "stance_analysis_summary.png" 1780822831 423497 bc9d999a5e902d093906e7db5dec310e ""
