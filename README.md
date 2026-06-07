@@ -1,13 +1,13 @@
 # Sinner–Alcaraz on Bluesky: Social Network & Sentiment Analysis
 
-A reproducible NLP and social-network-analysis pipeline that characterises the online
+A social network and social sentiment analysis pipeline that characterises the online
 discourse around the tennis rivalry between **Jannik Sinner** and **Carlos Alcaraz** on
 the [Bluesky](https://bsky.app) platform during the **2025 US Open** (21 August – 10
 September 2025).
 
 The pipeline crawls posts from the Bluesky `atproto` API, enriches them with sentiment,
 emotion and stance signals, builds reply/mention interaction graphs, detects communities,
-and renders 20+ visualisations covering network structure, emotional tone, and fanbase
+and renders various visualisations covering network structure, emotional tone, and fanbase
 polarisation.
 
 ## Key findings
@@ -59,14 +59,20 @@ limits. Results are merged and deduplicated by post URI.
   (`SamLowe/roberta-base-go_emotions`), whose 28 fine-grained labels are collapsed onto the
   8 Plutchik/NRC categories for side-by-side comparison between Transformers architecture and a lexicon algorithm.
 
-**Stance.** A stance detection algorithm was implemented: Single-mention posts assign the post's compound score to that player; dual-mention posts are split via sentence-level sentiment. User-level net stance fuses mean sentiment and mention frequency:
+**Stance.** Post-level stance assigns the RoBERTa compound score to the mentioned player
+for single-mention posts; dual-mention posts are split via sentence-level sentiment.
+Similarly, post-level emotion stance assigns the net GoEmotions (BERT) emotion valence —
+the sum of positive emotions (joy, trust, anticipation) minus the sum of negative emotions
+(anger, disgust, sadness, fear) — to the mentioned player. User-level net stance fuses mean
+sentiment, mention frequency, and mean emotion stance:
 
 ```
-net_stance = 0.50 · (mean_sinner − mean_alcaraz) + 0.15 · (freq_sinner − freq_alcaraz)
+net_stance = 0.50 · (mean_sinner − mean_alcaraz) + 0.15 · (freq_sinner − freq_alcaraz) + 0.35 · (mean_emo_sinner − mean_emo_alcaraz)
 ```
 
-(the remaining 0.35 weight is reserved for a future emotion-based component). Users are
-labelled `sinner` / `alcaraz` / `neutral` with a ±0.03 threshold (that can be adjusted in the constants section).
+Users are labelled `sinner` / `alcaraz` / `neutral` with a ±0.05 threshold (that can be
+adjusted in the constants section). Polarisation is measured via stance assortativity, the
+cross-stance edge ratio, and the standard deviation of net stance.
 
 **Network.** Nodes are users; edges are replies/mentions. Centrality (degree, closeness,
 betweenness, in/out-degree, PageRank) and communities (Louvain on `Gu`, Infomap on `Gd`)
@@ -133,7 +139,7 @@ python main.py
 - `network_global_metrics.csv` — graph-level density, transitivity, clustering, GCC size,
   Louvain/Infomap modularity.
 
-**`plots/`** (mirrored into `report/` for the LaTeX build) — 20+ PNGs including:
+**`plots/`**  — 20+ PNGs including:
 - Network graphs coloured by community, dominant emotion, and fanbase (plus `filtered/` views).
 - Community emotion profiles (Louvain & Infomap × NRC & BERT).
 - Sentiment distribution, sentiment over time, emotion-backend comparison.
@@ -167,9 +173,7 @@ python main.py
 
 ## Reproducibility
 
-Random seeds are fixed (`random.seed(42)`, `np.random.seed(42)`) and the DAG design with a
-frozen intermediate dataset means any downstream stage can be re-run without recomputing the
-expensive NLP enrichment.
+Random seeds are fixed (`random.seed(42)`, `np.random.seed(42)`) and the DAG design allow any downstream stage to be re-run
 
 ## License
 
