@@ -40,17 +40,8 @@
 \maketitle
 
 \begin{abstract}
-This report characterises the online discourse around the tennis rivalry between
-\textbf{Jannik Sinner} and \textbf{Carlos Alcaraz} on the \textbf{Bluesky} platform during the
-\textbf{2025 US Open} (21~August\,--\,10~September 2025). A reproducible pipeline crawls posts
-from the Bluesky \texttt{atproto} API, enriches them with RoBERTa sentiment, dual-backend
-emotion scoring (NRC lexicon and GoEmotions) and stance signals, builds reply/mention
-interaction graphs, detects communities (Louvain and Infomap), and renders 20+ visualisations.
-On a dataset of \textbf{9{,}078 posts} we find a \emph{sparse but highly modular} network
-(density $\approx$ 0.002; Louvain modularity $\approx$ 0.97), a \emph{predominantly
-neutral-to-positive} emotional tone, a sentiment time series that \emph{tracks match outcomes},
-and a \emph{sentiment-aware stance classifier} that meaningfully reclassifies users relative to
-a naive mention-frequency baseline.
+This report explores how the tennis rivalry between \textbf{Jannik Sinner} and \textbf{Carlos Alcaraz} shaped the online discourse on the \textbf{Bluesky} social platform during the \textbf{2025 US Open}. Gathering a dataset of \textbf{9{,}078 posts} via a day-by-day crawling strategy, we reconstruct the network of replies and mentions to map how communities formed, while tracing the emotional and sentiment dynamics triggered by match outcomes. The analysis reveals a highly modular network where fans cluster around shared news hubs rather than forming isolated echo chambers. Furthermore, by integrating neural sentiment signals with user interaction frequencies, we demonstrate how a sentiment-aware stance classifier can successfully refine and correct the classification errors inherent in simpler, frequency-only baselines.
+
 \end{abstract}
 
 \newpage
