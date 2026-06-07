@@ -1,10 +1,3 @@
-"""Social sentiment analysis stage [4].
-
-Reads the frozen processed CSV (and network artifacts) and renders sentiment /
-emotion visualisations. This stage is pure plotting: all NLP enrichment (cleaning,
-sentiment scoring, emotion scoring, NER/NED) is owned upstream by the preprocessing
-stage (``preprocessing.py``); nothing here recomputes enrichment.
-"""
 
 from typing import Optional
 
@@ -16,10 +9,6 @@ from utils import render_flat_chart, NRC_EMOTIONS
 from social_network_analysis import get_community_color_map
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# PLOTS
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _prepare_community_emotion_data(
     df: pd.DataFrame,
     Gu,
@@ -29,7 +18,6 @@ def _prepare_community_emotion_data(
     backend: str,
     cmap_name: str,
 ) -> tuple[pd.DataFrame, dict[str, str]]:
-    """Filter posts by top communities and average their emotion scores."""
     author_community = {}
     for handle in df['author_handle']:
         if handle in node_to_community and handle in Gu.nodes():
@@ -78,14 +66,7 @@ def plot_community_emotion_profiles(
     cmap_name: str = "tab20",
     backend: str = "nrc",
 ) -> None:
-    """Plot average emotion profiles for the top-k communities of the filtered graph Gu.
 
-    Communities are selected either by post volume or by node count (sort_by).
-    The ``backend`` chooses which emotion column family to chart:
-      - "nrc"  : the generic `emotion_*` columns (subtitle "NRC Emotion Lexicon").
-      - "bert" : the `bert_emotion_*` columns (subtitle "GoEmotions (BERT)").
-    The output filename is suffixed with the backend name.
-    """
     df_plot, custom_palette = _prepare_community_emotion_data(
         df, Gu, node_to_community, top_k, sort_by, backend, cmap_name
     )
@@ -119,7 +100,6 @@ def plot_community_emotion_profiles(
 
 
 def _prepare_emotion_backend_comparison_data(df: pd.DataFrame) -> Optional[pd.DataFrame]:
-    """Prepare distribution data comparing dominant-emotion distributions of both backends."""
     if 'nrc_dominant_emotion' not in df.columns or 'bert_dominant_emotion' not in df.columns:
         return None
 
@@ -135,12 +115,6 @@ def _prepare_emotion_backend_comparison_data(df: pd.DataFrame) -> Optional[pd.Da
 
 
 def plot_emotion_backend_comparison(df: pd.DataFrame, output_dir: str = "plots") -> None:
-    """Plot a grouped bar chart comparing dominant-emotion distributions of both backends.
-
-    Requires the `nrc_dominant_emotion` and `bert_dominant_emotion` columns produced
-    by ``run_nlp_enrichment(..., emotion_backend='both')``; if either is missing the
-    function prints a warning and returns without plotting.
-    """
     df_plot = _prepare_emotion_backend_comparison_data(df)
     if df_plot is None:
         print("Warning: 'nrc_dominant_emotion'/'bert_dominant_emotion' columns not found. Skipping plot.")
@@ -161,7 +135,6 @@ def plot_emotion_backend_comparison(df: pd.DataFrame, output_dir: str = "plots")
 
 
 def _prepare_sentiment_distribution_data(df: pd.DataFrame) -> Optional[tuple[list, list]]:
-    """Extract sentiment category categories and sizes."""
     if 'sentiment_category' not in df.columns:
         return None
     counts = df['sentiment_category'].value_counts()
@@ -169,7 +142,6 @@ def _prepare_sentiment_distribution_data(df: pd.DataFrame) -> Optional[tuple[lis
 
 
 def plot_sentiment_distribution(df: pd.DataFrame, output_dir: str = "plots") -> None:
-    """Plot a donut chart showing the overall distribution of sentiment categories."""
     data = _prepare_sentiment_distribution_data(df)
     if data is None:
         print("Warning: 'sentiment_category' column not found in DataFrame. Skipping plot.")
@@ -214,7 +186,6 @@ def plot_sentiment_distribution(df: pd.DataFrame, output_dir: str = "plots") -> 
 
 
 def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots", user_stances: Optional[pd.DataFrame] = None) -> None:
-    """Plot daily average sentiment compound scores for Sinner vs. Alcaraz fanbase or mentions over time."""
     if 'created_at' not in df.columns or 'sentiment_compound' not in df.columns:
         print("Warning: Required columns for sentiment over time not found. Skipping plot.")
         return

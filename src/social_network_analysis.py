@@ -11,10 +11,6 @@ import matplotlib.patches as mpatches
 
 from utils import save_plot_copies
 
-# ─────────────────────────────────────────────────────────────────────────────
-# COSTANTI COSTRUTTIVE
-# ─────────────────────────────────────────────────────────────────────────────
-
 EMOTION_COLORS: dict[str, str] = {
     "anger":        "#e74c3c",
     "anticipation": "#e67e22",
@@ -28,12 +24,8 @@ EMOTION_COLORS: dict[str, str] = {
 }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# PIPELINE DI ELABORAZIONE RETE (CORE METRICS)
-# ─────────────────────────────────────────────────────────────────────────────
-
 def build_networks(df: pd.DataFrame, did_to_handle: dict) -> tuple[nx.Graph, nx.DiGraph]:
-    """Build undirected and directed interaction graphs from reply and mention relations."""
+
     Gu = nx.Graph()
     Gd = nx.DiGraph()
 
@@ -65,7 +57,6 @@ def build_networks(df: pd.DataFrame, did_to_handle: dict) -> tuple[nx.Graph, nx.
 
 
 def calculate_centralities(Gu: nx.Graph, Gd: nx.DiGraph) -> dict:
-    """Compute degree/closeness/betweenness centralities plus PageRank on Gd."""
     deg_cent = nx.degree_centrality(Gu)
     close_cent = nx.closeness_centrality(Gu)
     between_cent = nx.betweenness_centrality(Gu)
@@ -97,7 +88,6 @@ def calculate_centralities(Gu: nx.Graph, Gd: nx.DiGraph) -> dict:
 
 
 def run_community_detection(Gu: nx.Graph, Gd: nx.DiGraph) -> dict:
-    """Detect communities (Louvain on Gu, Infomap on Gd) and compute global network statistics."""
     if len(Gu.nodes()) <= 1:
         print("Graph too small for community detection / GCC calculation.")
         return {
@@ -150,7 +140,6 @@ def run_community_detection(Gu: nx.Graph, Gd: nx.DiGraph) -> dict:
     gcc_size = gcc.number_of_nodes()
     gcc_fraction = gcc_size / Gu.number_of_nodes()
 
-    # Directed metrics
     density_dir = nx.density(Gd)
     transitivity_dir = nx.transitivity(Gd)
     avg_clustering_dir = nx.average_clustering(Gd)
@@ -242,7 +231,7 @@ def run_community_detection(Gu: nx.Graph, Gd: nx.DiGraph) -> dict:
 def save_initial_centrality_csv(
     Gu: nx.Graph, centralities: dict, comm_data: dict, filepath: str = "data/network_centrality_metrics.csv"
 ) -> pd.DataFrame:
-    """Assemble per-node centrality and community metrics into a DataFrame and save it to CSV."""
+
     multi_node = len(Gu.nodes()) > 1
     node_to_louvain = comm_data["node_to_louvain"]
     node_to_infomap = comm_data.get("node_to_infomap", {})
@@ -267,7 +256,6 @@ def save_initial_centrality_csv(
 
 
 def get_community_color_map(node_to_community: dict, cmap_name: str = "viridis") -> dict:
-    """Map each community ID to a hex colour drawn from the named colormap."""
     unique_cids = sorted(set(node_to_community.values()))
     n = len(unique_cids)
     try: cmap = plt.colormaps.get_cmap(cmap_name)
@@ -280,13 +268,7 @@ def get_community_color_map(node_to_community: dict, cmap_name: str = "viridis")
         color_map[cid] = mcolors.to_hex(rgba)
     return color_map
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# NUOVA STRUTTURA SCALABILE: SEPARAZIONE FILTRAGGIO & RENDERING
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _select_top_communities(graph, node_to_community: dict, df_processed: Optional[pd.DataFrame], top_k: int, sort_by: str) -> set:
-    """Restituisce il set di ID delle top-k comunità filtrate per volume di post o nodi."""
     if sort_by == "post_volume" and df_processed is not None:
         author_community = {
             handle: node_to_community[handle]
@@ -308,16 +290,13 @@ def extract_top_subgraph(
     df_processed: Optional[pd.DataFrame] = None,
     sort_by: str = "post_volume"
 ) -> nx.Graph:
-    """Estrae un sottografo applicando i filtri di dimensione componente e top-k cluster."""
     G_filtered = G.copy()
     
-    # Filtro componenti isolati/piccoli
     components = list(nx.weakly_connected_components(G_filtered)) if G_filtered.is_directed() else list(nx.connected_components(G_filtered))
     for component in components:
         if len(component) <= min_component_size:
             G_filtered.remove_nodes_from(component)
             
-    # Filtro basato sulle top-k comunità richieste
     if top_k_communities and node_to_community:
         top_comms = _select_top_communities(G_filtered, node_to_community, df_processed, top_k_communities, sort_by)
         nodes_to_remove = [n for n in G_filtered.nodes() if node_to_community.get(n) not in top_comms]
@@ -339,29 +318,24 @@ def render_network(
     legend_title: Optional[str] = None,
     legend_ncol: int = 2
 ) -> None:
-    """Funzione universale e scalabile per disegnare grafi (diretti o indiretti) configurando stili a piacimento."""
     if G.number_of_nodes() == 0:
         print(f"Warning: Grafo vuoto per {filename}. Plot saltato.")
         return
 
     fig, ax = plt.subplots(figsize=(12, 12))
-    
-    # Rendering degli archi
+
     if G.is_directed():
         nx.draw_networkx_edges(G, pos, ax=ax, alpha=0.2, edge_color="grey",
                                arrows=True, arrowstyle='-|>', arrowsize=12, connectionstyle="arc3,rad=0.1")
     else:
         nx.draw_networkx_edges(G, pos, ax=ax, alpha=0.15, edge_color="grey")
         
-    # Rendering dei nodi
     nx.draw_networkx_nodes(G, pos, ax=ax, node_size=node_sizes, node_color=node_colors, 
                            alpha=0.9, edgecolors='black', linewidths=0.5)
     
-    # Rendering delle etichette (Label)
     if labels:
         nx.draw_networkx_labels(G, pos, ax=ax, labels=labels, font_size=9, font_weight="bold", font_color="#1e272c")
         
-    # Inserimento Legenda personalizzata
     if legend_patches:
         ax.legend(handles=legend_patches, loc="lower left", fontsize=10, 
                   title=legend_title, title_fontsize=11, framealpha=0.85, ncol=legend_ncol)
@@ -373,12 +347,7 @@ def render_network(
     plt.close(fig)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# RETROCOMPATIBILITÀ: WRAPPERS RIORGANIZZATI SULLA LOGICA UNIFICATA
-# ─────────────────────────────────────────────────────────────────────────────
-
 def get_filtered_networks(Gu: nx.Graph, Gd: nx.DiGraph, min_component_size: int = 10) -> tuple[nx.Graph, nx.DiGraph]:
-    """Estrazione dei componenti filtrati (funzione mantenuta per stance analysis)."""
     return extract_top_subgraph(Gu, min_component_size), extract_top_subgraph(Gd, min_component_size)
 
 
@@ -387,13 +356,11 @@ def plot_network_graphs(
     output_dir: str = "plots", pos: Optional[dict] = None, pos_dir: Optional[dict] = None,
     cmap_undirected: str = "tab20", cmap_directed: str = "tab20",
 ) -> tuple[Optional[dict], Optional[dict]]:
-    """Genera i grafi standard colorati per Comunità riutilizzando render_network."""
     deg_cent = centralities["deg_cent"]
     pagerank = centralities["pagerank"]
     node_to_louvain = comm_data["node_to_louvain"]
     node_to_infomap = comm_data.get("node_to_infomap", {})
 
-    # Rete Indiretta (Louvain)
     nodes_in_relations = [n for n, d in Gu.degree() if d > 0]
     subG = Gu.subgraph(nodes_in_relations)
     if pos is None and nodes_in_relations:
@@ -412,7 +379,7 @@ def plot_network_graphs(
             filename="network_graph.png", output_dir=output_dir
         )
 
-    # Rete Diretta (Infomap)
+
     nodes_in_relations_dir = [n for n, d in Gd.degree() if d > 0]
     subG_dir = Gd.subgraph(nodes_in_relations_dir)
     if pos_dir is None and nodes_in_relations_dir:
@@ -439,7 +406,6 @@ def plot_filtered_network_graph(
     min_component_size: int = 10, output_dir: str = "plots/filtered", top_k: int = 5, sort_by: str = "post_volume",
     cmap_undirected: str = "tab20", cmap_directed: str = "tab20",
 ) -> tuple[nx.Graph, nx.DiGraph, dict, dict]:
-    """Sfrutta il nuovo estrattore universale extract_top_subgraph prima di lanciare il plot."""
     Gu_plot = extract_top_subgraph(Gu, min_component_size, top_k, comm_data["node_to_louvain"], df_processed, sort_by)
     Gd_plot = extract_top_subgraph(Gd, min_component_size, top_k, comm_data["node_to_infomap"], df_processed, sort_by)
 
@@ -462,14 +428,12 @@ def plot_network_graphs_by_emotion(
     Gu: nx.Graph, Gd: nx.DiGraph, df_cent: pd.DataFrame, centralities: dict, df_processed: pd.DataFrame,
     backend: str = "nrc", output_dir: str = "plots", pos: Optional[dict] = None, pos_dir: Optional[dict] = None,
 ) -> None:
-    """Iniezione dinamica dei colori emozionali all'interno dell'architettura unificata render_network."""
     deg_cent = centralities["deg_cent"]
     pagerank = centralities["pagerank"]
     user_emotion = _get_user_dominant_emotion(df_processed, backend)
     
     legend_patches = [mpatches.Patch(color=color, label=emotion.capitalize()) for emotion, color in EMOTION_COLORS.items()]
 
-    # Undirected
     nodes = [n for n, d in Gu.degree() if d > 0]
     if nodes:
         subG = Gu.subgraph(nodes)
@@ -482,7 +446,6 @@ def plot_network_graphs_by_emotion(
                        f"Undirected Social Network Graph — Dominant Emotion ({backend.upper()})\n(node size proportional to degree centrality)",
                        f"network_graph_emotion_{backend}.png", output_dir, legend_patches, "Dominant Emotion")
 
-    # Directed
     nodes_dir = [n for n, d in Gd.degree() if d > 0]
     if nodes_dir:
         subG_dir = Gd.subgraph(nodes_dir)
@@ -500,7 +463,6 @@ def plot_network_graphs_by_fanbase(
     Gu: nx.Graph, Gd: nx.DiGraph, df_cent: pd.DataFrame, centralities: dict,
     output_dir: str = "plots", pos: Optional[dict] = None, pos_dir: Optional[dict] = None,
 ) -> None:
-    """Disegna la struttura di rete mappando i colori in base alla stance (Sinner, Alcaraz, Neutral)."""
     deg_cent = centralities["deg_cent"]
     pagerank = centralities["pagerank"]
     FANBASE_COLORS = {'sinner': '#f39c12', 'alcaraz': '#00b4d8', 'neutral': '#cbd5e0'}
@@ -509,7 +471,6 @@ def plot_network_graphs_by_fanbase(
     get_color = lambda n: FANBASE_COLORS.get(stance_map.get(n, 'neutral') if pd.notna(stance_map.get(n, 'neutral')) else 'neutral', FANBASE_COLORS['neutral'])
     legend_patches = [mpatches.Patch(color='#f39c12', label='Sinner Fanbase'), mpatches.Patch(color='#00b4d8', label='Alcaraz Fanbase'), mpatches.Patch(color='#cbd5e0', label='Neutral')]
 
-    # Undirected
     nodes = [n for n, d in Gu.degree() if d > 0]
     if nodes:
         subG = Gu.subgraph(nodes)

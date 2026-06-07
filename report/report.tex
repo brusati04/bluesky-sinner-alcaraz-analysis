@@ -268,7 +268,9 @@ invisible: where the undirected partition returns a single cohesive macro-commun
 directed analysis reveals an articulated internal segmentation that better reflects the
 diffusion dynamics within the network. The same contrast holds on the filtered top-5
 subgraphs (Figure~\ref{fig:netcompare_filtered}), where the directed view separates the news
-hubs and their downstream chains far more cleanly.
+hubs and their downstream chains far more cleanly. From here on, the directed representation 
+are the full focus of the analysis, as they better capture the actual communication patterns
+and information flow.
 
 \begin{figure}[H]
 \centering
@@ -350,9 +352,8 @@ distribution on \texttt{neutral}.}
 \end{figure}
 
 It is worth noting that both models operate \textbf{only in English}, so posts written in other
-languages are classified as neutral. This explains the high share of neutral posts observed in
-Section~\ref{sec:sentresults}, and points directly to a concrete avenue for future improvement
-(see Section~\ref{sec:discussion}).
+languages are classified as neutral. This partially explains the high share of neutral posts,
+and points directly to a concrete avenue for future improvement (see Section~\ref{sec:discussion}).
 
 The same BERT emotion signal can be projected back onto the directed network
 (Figure~\ref{fig:netemotion}), colouring each node by its dominant emotion. The resulting map
@@ -483,25 +484,29 @@ frequency does the classifier recover genuine support versus criticism
 (Section~\ref{sec:stanceresults}).
 
 \paragraph{Limitations and future work.}
-The principal limitation is language coverage. Both emotion/sentiment models operate only in
-English, so non-English posts are pushed into the \texttt{neutral} class; this inflates the
-observed 77.2\% neutral share and almost certainly understates genuine affect within the
-non-English portion of the community. Future improvements should therefore add language
-detection and multilingual sentiment/emotion models, which would sharpen both the temporal
-sentiment curves and the user-level stance scores. Further work could also extend the crawl
-window beyond a single tournament to test whether the absence of echo chambers persists outside
-the shared, high-salience context of a Grand Slam.
+There are a few limitations to this study. One core issue is the time window: the crawl covers only 
+the US Open, which is a shared, high-salience event that may suppress echo-chamber dynamics.
+Future work should extend the window to test whether the absence of echo chambers persists outside 
+of this context. Another limitation is the reliance on English-only sentiment and emotion models,
+which likely inflates the neutral share and understates genuine affect in non-English posts; but also 
+greatly reduces the amount of data that can be meaningfully analysed, also possibly not considering 
+parts of communities that predominantly post in other languages. 
+Future improvements should add language detection and multilingual models to sharpen both sentiment
+curves and stance scores. There is also the still-open research question on how to handle at best
+sarcasm and irony, which are common in sports discourse and can easily mislead sentiment classifiers. 
+Finally, the stance fusion formula is currently heuristic; future work could explore more complex 
+approaches.
 
 \subsection{Conclusion}
 
-This study characterised the Sinner--Alcaraz discourse on Bluesky during the 2025 US~Open by
-combining directed/undirected community detection, neural sentiment and emotion analysis, and a
-sentiment-aware stance classifier over a dataset of 9{,}078 posts. The picture that emerges is
-of a \textbf{highly modular but non-polarised} community: fans cluster around shared news hubs
-rather than partisan echo chambers, opposing fanbases interact across stance lines, and the
-emotional tone---while sharply reactive to match outcomes---stays predominantly neutral and
-civil, even in defeat. Methodologically, the work demonstrates that a context-aware transformer
+To answer the research question, this study characterised the Sinner--Alcaraz discourse on Bluesky 
+during the 2025 US~Open by combining directed/undirected community detection, neural sentiment
+and emotion analysis, and a sentiment-aware stance classifier over a dataset of 9{,}078 posts. 
+The picture that emerges is of a \textbf{highly modular but non-polarised} community: fans cluster 
+around shared news hubs rather than partisan echo chambers, opposing fanbases interact across stance
+lines, and the emotional tone---while sharply reactive to match outcomes---stays predominantly neutral
+and civil, even in defeat. Methodologically, the work demonstrates that a context-aware transformer
 is necessary to avoid lexical artefacts in emotion detection, and that fusing sentiment with
-interaction frequency meaningfully refines and corrects a frequency-only stance baseline.
-
+interaction frequency meaningfully outperforms a frequency-only stance baseline, recovering genuine
+support from mere mention.
 \end{document}

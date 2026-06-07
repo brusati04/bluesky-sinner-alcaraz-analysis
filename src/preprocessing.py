@@ -31,14 +31,14 @@ from utils import (
     ALCARAZ_KEYWORDS,
 )
 
-# Ensure the NLTK resources required for tokenisation/stopwords are available.
+
 for _resource in ['stopwords', 'punkt', 'punkt_tab']:
     try:
         nltk.data.find(f'corpora/{_resource}' if _resource == 'stopwords' else f'tokenizers/{_resource}')
     except LookupError:
         nltk.download(_resource, quiet=True)
 
-# Load the spaCy English model, downloading it on first run if needed.
+
 try:
     nlp = spacy.load("en_core_web_sm")
 except OSError:
@@ -51,7 +51,6 @@ custom_stopwords = set(stopwords.words('english')).union({'tennis', 'match', 'pl
 
 
 def clean_text(text: Optional[str]) -> str:
-    """Normalise raw post text: unescape HTML entities, strip URLs and @handles, collapse whitespace."""
     if pd.isna(text):
         return ""
     text = html.unescape(text)
@@ -61,24 +60,19 @@ def clean_text(text: Optional[str]) -> str:
 
 
 def clean_text_bert(text: Optional[str]) -> str:
-    """Light normalisation for BERT/RoBERTa: unescape HTML, replace handles with @user, replace URLs with http, preserve punctuation and casing."""
     if pd.isna(text):
         return ""
     text = html.unescape(text)
-    # Replace links with 'http' (standard for CardiffNLP twitter-roberta-base-sentiment)
+   
     text = re.sub(r'http\S+|www\.\S+', 'http', text)
-    # Replace handles with '@user' (standard for CardiffNLP twitter-roberta-base-sentiment)
+   
     text = re.sub(r'@\w+', '@user', text)
     return re.sub(r'\s+', ' ', text).strip()
 
 
 
 def preprocess(text: Optional[str]) -> str:
-    """Clean, tokenise and lemmatise post text into a space-joined string of meaningful tokens.
 
-    Stopwords and single-character ASCII tokens are dropped, while hashtags and
-    non-ASCII tokens (e.g. emojis) are preserved.
-    """
     cleaned = clean_text(text)
     tokens = tokenizer.tokenize(cleaned.lower())
 
@@ -94,7 +88,6 @@ def preprocess(text: Optional[str]) -> str:
         if lemma in custom_stopwords or t in custom_stopwords:
             continue
         if t.isalnum() or t.startswith('#') or not t.isascii():
-            # Keep emojis/non-ASCII even when a single character; drop lone ASCII letters.
             if len(lemma) > 1 or not t.isascii():
                 filtered_tokens.append(lemma)
 
@@ -102,7 +95,6 @@ def preprocess(text: Optional[str]) -> str:
 
 
 def load_data(filepath: str, parse_linked_entities: bool = False) -> tuple[Optional[pd.DataFrame], Optional[dict]]:
-    """Load, parse dates/lists, and build DID->handle map for raw or processed datasets."""
     for directory in ("data", "plots", "report"):
         os.makedirs(directory, exist_ok=True)
 
@@ -111,12 +103,10 @@ def load_data(filepath: str, parse_linked_entities: bool = False) -> tuple[Optio
     except FileNotFoundError:
         print(f"Error: {filepath} not found!")
         return None, None
-
-    # Parse timestamps
+   
     df['created_at'] = pd.to_datetime(df['created_at'], errors='coerce', format='mixed')
     df = df.dropna(subset=['created_at'])
 
-    # Parse list columns
     list_columns = ['mentions', 'hashtags', 'links']
     if parse_linked_entities:
         list_columns.append('linked_entities')
@@ -128,12 +118,6 @@ def load_data(filepath: str, parse_linked_entities: bool = False) -> tuple[Optio
     return df, build_did_to_handle(df)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# ENRICHMENT CONSTANTS
-# ─────────────────────────────────────────────────────────────────────────────
-
-# Mapping from GoEmotions (28 fine-grained labels) to the 8 NRC/Plutchik
-# categories, so the BERT backend produces scores comparable to NRCLex.
 GOEMOTIONS_TO_NRC = {
     "joy":          ["joy", "amusement", "excitement", "love", "pride", "relief"],
     "trust":        ["admiration", "approval", "gratitude", "caring"],
@@ -145,25 +129,16 @@ GOEMOTIONS_TO_NRC = {
     "sadness":      ["sadness", "disappointment", "grief", "remorse", "embarrassment"],
 }
 
-# NOTE: the stance-weight and polarity groupings below are scaffolding for a
-# multi-signal stance score that the current pipeline does not yet compute.
 POSITIVE_EMOTIONS = ["bert_emotion_joy", "bert_emotion_trust", "bert_emotion_anticipation"]
 NEGATIVE_EMOTIONS = ["bert_emotion_anger", "bert_emotion_disgust", "bert_emotion_sadness", "bert_emotion_fear"]
 W_SENTIMENT = 0.50
 W_EMOTION = 0.35
 W_FREQUENCY = 0.15
 
-# Stance-computation configuration (owned by the enrichment stage).
 STANCE_THRESHOLD = 0.05
 MIN_POSTS_FOR_STANCE = 1
 DEBUG = True
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# NLP, ENTITY MATCHING & EMOTION SCORING
-# ─────────────────────────────────────────────────────────────────────────────
-
-# Lazily-initialised GoEmotions (RoBERTa) classifier for the BERT emotion backend.
 _emotion_clf_bert = None
 
 
@@ -184,7 +159,6 @@ def _get_emotion_clf_bert():
 
 
 def extract_ner(text: Optional[str]) -> list[tuple[str, str]]:
-    """Extract unique (entity_text, label) pairs for PERSON/ORG/GPE/LOC entities via spaCy."""
     if pd.isna(text) or text == "":
         return []
     ents = []
@@ -195,10 +169,6 @@ def extract_ner(text: Optional[str]) -> list[tuple[str, str]]:
 
 
 def link_entities_dbpedia(text: Optional[str], confidence: float = 0.5) -> list[dict]:
-    """Link the two rival players to their DBpedia URIs using local keyword matching.
-
-    This replaces the slow DBpedia Spotlight API while preserving the same output schema.
-    """
     if not text or pd.isna(text) or str(text).strip() == "":
         return []
 
@@ -212,7 +182,6 @@ def link_entities_dbpedia(text: Optional[str], confidence: float = 0.5) -> list[
 
 
 def score_emotions(text: str) -> dict[str, float]:
-    """Score a single text across the 8 NRC emotion categories, returning zeros on empty/invalid input."""
     try:
         if not text or pd.isna(text) or str(text).strip() == "":
             return {e: 0.0 for e in NRC_EMOTIONS}
@@ -229,20 +198,6 @@ def score_emotions(text: str) -> dict[str, float]:
 
 
 def add_emotion_columns(df: pd.DataFrame, text_col: str = 'cleaned_text', backend: str = "nrc") -> pd.DataFrame:
-    """Add the 8 backend-prefixed emotion columns plus a ``{backend}_dominant_emotion``
-    column to a DataFrame.
-
-    The ``backend`` selects both the scoring engine and the output column family:
-      - "nrc"  : per-post NRCLex affect frequencies
-                 -> ``nrc_emotion_*`` / ``nrc_dominant_emotion``.
-      - "bert" : batched GoEmotions (RoBERTa) inference, with the 28 fine-grained
-                 labels collapsed onto the 8 NRC categories via GOEMOTIONS_TO_NRC
-                 -> ``bert_emotion_*`` / ``bert_dominant_emotion``.
-
-    Each backend writes only its own prefixed columns (no generic ``emotion_*`` /
-    ``dominant_emotion``), so running both backends never clashes. Posts with no
-    detected emotion are labelled 'neutral'.
-    """
     prefix = f"{backend}_emotion_"
     dom_col = f"{backend}_dominant_emotion"
     if backend == "bert":
@@ -250,7 +205,6 @@ def add_emotion_columns(df: pd.DataFrame, text_col: str = 'cleaned_text', backen
         batch_size = 128
         emotion_inputs = df[text_col].tolist()
 
-        # Generator to pass to pipeline for parallelized dataloading and batching on GPU
         def emotion_generator():
             for t in emotion_inputs:
                 yield t if (isinstance(t, str) and t.strip() != "") else " "
@@ -273,7 +227,6 @@ def add_emotion_columns(df: pd.DataFrame, text_col: str = 'cleaned_text', backen
             }
             emotion_rows.append(nrc_scores)
 
-            # If the raw max predicted score is 'neutral', classify dominant as 'neutral'
             raw_max_label = max(scores, key=scores.get)
             if raw_max_label == "neutral":
                 dominant_emotions.append("neutral")
@@ -286,8 +239,6 @@ def add_emotion_columns(df: pd.DataFrame, text_col: str = 'cleaned_text', backen
         emotion_df = pd.DataFrame(df[text_col].apply(score_emotions).tolist(), index=df.index)
 
     emotion_df.columns = [f'{prefix}{e}' for e in NRC_EMOTIONS]
-    # Drop any prior columns for THIS backend so a re-run overwrites rather than
-    # duplicates them (each backend owns its own prefixed column family).
     stale_cols = [c for c in emotion_df.columns if c in df.columns]
     if dom_col in df.columns:
         stale_cols.append(dom_col)
@@ -305,25 +256,12 @@ def add_emotion_columns(df: pd.DataFrame, text_col: str = 'cleaned_text', backen
 
 
 def derive_player_sentiment_scores(df: pd.DataFrame) -> dict[str, list[float]]:
-    """Bucket compound scores per player (Sinner / Alcaraz) using precomputed flags."""
     sinner_scores = df.loc[df['is_sinner'], 'sentiment_compound'].tolist()
     alcaraz_scores = df.loc[df['is_alcaraz'], 'sentiment_compound'].tolist()
     return {"sinner_scores": sinner_scores, "alcaraz_scores": alcaraz_scores}
 
 
 def run_nlp_enrichment(df: pd.DataFrame, output_filepath: str = "data/sinner_alcaraz_processed.csv", emotion_backend: str = "both") -> dict:
-    """Enrich crawled posts with cleaned text, RoBERTa sentiment, emotions, NER and entity links.
-
-    Writes the enriched DataFrame to output_filepath and returns it together with
-    per-player sentiment score buckets.
-
-    The ``emotion_backend`` parameter selects the emotion-scoring engine(s):
-      - "nrc"  : NRCLex affect frequencies only -> `nrc_emotion_*` / `nrc_dominant_emotion`.
-      - "bert" : GoEmotions (RoBERTa) only -> `bert_emotion_*` / `bert_dominant_emotion`.
-      - "both" : (default) run both backends, producing the `nrc_emotion_*` /
-                 `nrc_dominant_emotion` and `bert_emotion_*` / `bert_dominant_emotion`
-                 column families for side-by-side comparison.
-    """
     df = df.copy()
     total_posts = len(df)
     print(f"[NLP] Starting BERT/RoBERTa NLP enrichment for {total_posts} posts...")
@@ -365,7 +303,6 @@ def run_nlp_enrichment(df: pd.DataFrame, output_filepath: str = "data/sinner_alc
     df['linked_entities'] = df['cleaned_text'].apply(link_entities_dbpedia)
     print("[NLP] Step 6/6 completed.")
 
-    # Record player flags globally
     is_sinner_list = []
     is_alcaraz_list = []
     for _, row in df.iterrows():
@@ -382,12 +319,7 @@ def run_nlp_enrichment(df: pd.DataFrame, output_filepath: str = "data/sinner_alc
     return {"df": df, **scores}
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STANCE COMPUTATION (post-level, user-level, classification)
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _sentence_sentiment(sentence: str) -> float:
-    """Return CardiffNLP RoBERTa compound score (P(positive) - P(negative)) for a single sentence."""
     if not sentence or not sentence.strip():
         return 0.0
 
@@ -410,7 +342,6 @@ def _sentence_sentiment(sentence: str) -> float:
 
 
 def _sentence_mentions(sentence: str) -> tuple[bool, bool]:
-    """Return (mentions_sinner, mentions_alcaraz) for a sentence."""
     text_lower = sentence.lower()
     has_sinner = any(kw in text_lower for kw in SINNER_KEYWORDS)
     has_alcaraz = any(kw in text_lower for kw in ALCARAZ_KEYWORDS)
@@ -418,10 +349,6 @@ def _sentence_mentions(sentence: str) -> tuple[bool, bool]:
 
 
 def _split_dual_mention(text: str, sentence_scores: dict[str, float]) -> tuple[float, float]:
-    """
-    Given a post mentioning both players, return (sinner_score, alcaraz_score)
-    based on sentence-level sentiment using precomputed sentence scores.
-    """
     sentences = sent_tokenize(str(text))
 
     sinner_scores = []
@@ -449,7 +376,6 @@ def _split_dual_mention(text: str, sentence_scores: dict[str, float]) -> tuple[f
 
 
 def detect_players(df: pd.DataFrame) -> pd.DataFrame:
-    """Add is_sinner / is_alcaraz boolean columns using linked_entities and keyword fallback."""
     if 'is_sinner' in df.columns and 'is_alcaraz' in df.columns:
         return df
 
@@ -462,12 +388,6 @@ def detect_players(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def compute_post_stances(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Add stance_sinner / stance_alcaraz and emotion_sinner / emotion_alcaraz columns.
-    - Single-mention posts: full RoBERTa compound and net GoEmotions score assigned to that player
-    - Dual-mention posts: sentence-level sentiment split for sentiment, 50/50 split for emotion
-    - No-mention posts: 0 for both
-    """
     compound = df['sentiment_compound'].fillna(0)
 
     single_sinner = df['is_sinner'] & ~df['is_alcaraz']
@@ -480,7 +400,6 @@ def compute_post_stances(df: pd.DataFrame) -> pd.DataFrame:
     df['emotion_sinner'] = 0.0
     df['emotion_alcaraz'] = 0.0
 
-    # Calculate post-level net GoEmotions score
     pos_sum = df[POSITIVE_EMOTIONS].sum(axis=1)
     neg_sum = df[NEGATIVE_EMOTIONS].sum(axis=1)
     net_emotion = pos_sum - neg_sum
@@ -509,7 +428,6 @@ def compute_post_stances(df: pd.DataFrame) -> pd.DataFrame:
                 if s_clean:
                     all_unique_sentences.add(s_clean)
 
-        # Score all unique sentences in batch
         unique_list = list(all_unique_sentences)
         sentence_scores = {}
 
@@ -541,7 +459,6 @@ def compute_post_stances(df: pd.DataFrame) -> pd.DataFrame:
                     p_pos = scores_dict.get('positive', 0.0)
                 sentence_scores[s] = p_pos - p_neg
 
-        # Split dual mentions using the precomputed sentence scores
         sinner_scores = []
         alcaraz_scores = []
         for idx in dual_indices:
@@ -565,9 +482,6 @@ def compute_post_stances(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def compute_user_stances(df: pd.DataFrame, min_posts: int = MIN_POSTS_FOR_STANCE) -> pd.DataFrame:
-    """
-    Aggregate per author: mean stance scores, frequencies, net emotion scores, and net stance.
-    """
     df = df.copy()
     if 'emotion_sinner' not in df.columns:
         df['emotion_sinner'] = 0.0
@@ -611,7 +525,6 @@ def compute_user_stances(df: pd.DataFrame, min_posts: int = MIN_POSTS_FOR_STANCE
 
 
 def classify_stances(user_stances: pd.DataFrame, threshold: float = STANCE_THRESHOLD) -> pd.DataFrame:
-    """Assign stance_leaning based on net_stance threshold."""
     def label(score):
         if score > threshold:
             return 'sinner'
@@ -632,11 +545,6 @@ def classify_stances(user_stances: pd.DataFrame, threshold: float = STANCE_THRES
 
 
 def prepare_dataset(raw_filepath: str, processed_filepath: str) -> tuple[Optional[pd.DataFrame], Optional[dict]]:
-    """Return the NLP-enriched dataset and DID->handle map for the analysis pipeline.
-
-    Loads a cached processed file when available; otherwise runs the full NLP
-    enrichment over the raw crawled posts. Returns (None, None) if raw input is missing.
-    """
     df = None
     did_to_handle = None
     if os.path.exists(processed_filepath):
@@ -663,17 +571,13 @@ def prepare_dataset(raw_filepath: str, processed_filepath: str) -> tuple[Optiona
         else:
             print("[INFO] Recalculating stance and dominant emotion columns to processed dataset...")
 
-            # Post stance
             df = compute_post_stances(df)
-            # User stance
             user_stances = compute_user_stances(df, min_posts=1)
             user_stances = classify_stances(user_stances, threshold=0.05)
             
-            # Map back to posts DataFrame
             df['author_stance_score'] = df['author_handle'].map(user_stances['net_stance']).fillna(0.0)
             df['author_stance_leaning'] = df['author_handle'].map(user_stances['stance_leaning']).fillna('neutral')
             
-            # Map user dominant emotion back to df
             for backend in ("nrc", "bert"):
                 col = "nrc_dominant_emotion" if backend == "nrc" else "bert_dominant_emotion"
                 user_emotions = df.groupby("author_handle")[col].agg(
@@ -681,7 +585,6 @@ def prepare_dataset(raw_filepath: str, processed_filepath: str) -> tuple[Optiona
                 ).to_dict()
                 df[f'author_dominant_emotion_{backend}'] = df['author_handle'].map(user_emotions).fillna("neutral")
                 
-            # Overwrite the cache file with completed dataset
             df.to_csv(processed_filepath, index=False)
             print(f"[INFO] Processed dataset cache updated at {processed_filepath}")
             
@@ -689,7 +592,7 @@ def prepare_dataset(raw_filepath: str, processed_filepath: str) -> tuple[Optiona
 
 
 def plot_community_wordcloud(df: pd.DataFrame, output_dir: str = "plots") -> None:
-    """Generate and save a single word cloud for the entire community using preprocessed text."""
+
     
     if 'preprocessed_text' not in df.columns:
         print("Warning: 'preprocessed_text' column not found. Skipping word cloud.")
@@ -697,7 +600,6 @@ def plot_community_wordcloud(df: pd.DataFrame, output_dir: str = "plots") -> Non
 
     from wordcloud import WordCloud
 
-    # Filter out empty preprocessed texts and combine
     valid_texts = df['preprocessed_text'].dropna().astype(str).tolist()
     valid_texts = [t for t in valid_texts if t.strip() != ""]
 
@@ -706,8 +608,7 @@ def plot_community_wordcloud(df: pd.DataFrame, output_dir: str = "plots") -> Non
         return
 
     community_text = " ".join(valid_texts)
-    
-    # Generate single community word cloud
+
     wordcloud_community = WordCloud(
         width=800,
         height=400,
