@@ -5,16 +5,24 @@
 \geometry{margin=1in}
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
+\usepackage{xcolor}
 \usepackage{hyperref}
 \usepackage{booktabs}
-\usepackage{listings}
-\usepackage{xcolor}
-\lstset{basicstyle=\ttfamily\small, breaklines=true, frame=single, backgroundcolor=\color{gray!10}}
-\usepackage{enumitem}
 \usepackage{caption}
 \usepackage{subcaption}
+\usepackage{float}
 
-\title{Social Network \& Sentiment Analysis of the Sinner–Alcaraz Rivalry on Bluesky (US Open 2025)}
+% Figures live alongside this file (plots are mirrored into report/).
+\graphicspath{{./}{./filtered/}}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!50!black,
+  urlcolor=blue!50!black,
+  citecolor=blue!50!black
+}
+
+\title{Sinner--Alcaraz on Bluesky:\\ A Social Network \& Sentiment Analysis of the 2025 US Open}
 \author{Project Report}
 \date{\today}
 
@@ -23,45 +31,68 @@
 \maketitle
 
 \begin{abstract}
-This report presents a comprehensive analysis of the online discourse surrounding tennis rivals Jannik Sinner and Carlos Alcaraz on the Bluesky platform during the 2025 US Open. Using a modular pipeline that combines social network construction, NLP-based sentiment and emotion mining, and stance detection, we characterise fan interactions, community structures, emotional tones, and polarisation. Key findings include a moderately polarised community dominated by positive emotions (trust, joy, anticipation), a clear sentiment reaction to match outcomes, and the superiority of sentiment-aware stance classification over naive frequency-based methods. The pipeline is reproducible, produces over 20 visualisations, and includes extensive diagnostic tests.
+This report characterises the online discourse around the tennis rivalry between
+\textbf{Jannik Sinner} and \textbf{Carlos Alcaraz} on the \textbf{Bluesky} platform during the
+\textbf{2025 US Open} (21~August\,--\,10~September 2025). A reproducible pipeline crawls posts
+from the Bluesky \texttt{atproto} API, enriches them with RoBERTa sentiment, dual-backend
+emotion scoring (NRC lexicon and GoEmotions) and stance signals, builds reply/mention
+interaction graphs, detects communities (Louvain and Infomap), and renders 20+ visualisations.
+On a dataset of \textbf{9{,}078 posts} we find a \emph{sparse but highly modular} network
+(density $\approx$ 0.002; Louvain modularity $\approx$ 0.97), a \emph{predominantly
+neutral-to-positive} emotional tone, a sentiment time series that \emph{tracks match outcomes},
+and a \emph{sentiment-aware stance classifier} that meaningfully reclassifies users relative to
+a naive mention-frequency baseline.
 \end{abstract}
+
+\tableofcontents
+\bigskip
 
 \section{Objective}
 
-The primary goal of this project is to \textbf{characterise the online discourse} surrounding two of tennis's biggest rivals – Jannik Sinner and Carlos Alcaraz – on the Bluesky social platform during the \textbf{2025 US Open} (21 August – 10 September 2025). Specifically, the analysis aims to:
+The goal of this project is to \textbf{characterise the online discourse} surrounding two of
+tennis's biggest rivals---Jannik Sinner and Carlos Alcaraz---on the Bluesky social platform
+during the 2025 US Open. Concretely the analysis aims to:
 
 \begin{itemize}
-    \item \textbf{Discover} how fans of each player interact, what emotional tones dominate the conversation, and whether the community is polarised along fanbase lines.
-    \item \textbf{Describe} the \textbf{social network structure} built from replies and mentions, identify cohesive communities, and measure user influence via centrality metrics.
-    \item \textbf{Quantify} \textbf{sentiment and emotion} expressed in posts using state-of-the-art NLP models (RoBERTa, NRC lexicon, GoEmotions) and compare two emotion backends.
-    \item \textbf{Assign a stance} (pro-Sinner, pro-Alcaraz, or neutral) to each user by fusing \textbf{sentiment signals} with \textbf{mention frequency}, then evaluate how well this refined stance aligns with simpler frequency-based baselines.
-    \item \textbf{Visualise} all results (network graphs, sentiment time series, emotion profiles, stance distributions) to support interpretability and storytelling.
+    \item \textbf{Describe} the social-network structure built from replies and mentions,
+    identify cohesive communities, and measure user influence via centrality metrics.
+    \item \textbf{Quantify} sentiment and emotion expressed in posts using state-of-the-art
+    NLP models (RoBERTa, NRC lexicon, GoEmotions) and compare two emotion backends.
+    \item \textbf{Assign a stance} (pro-Sinner, pro-Alcaraz or neutral) to each user by fusing
+    sentiment signals with mention frequency, and evaluate how this refined stance differs from a
+    simpler frequency-only baseline.
+    \item \textbf{Visualise} all results to support interpretability---network graphs, sentiment
+    time series, emotion profiles and stance distributions.
 \end{itemize}
 
-The phenomenon under study is the \textbf{evolution of fan engagement} during a high-stakes tennis tournament, exploring how rivalry narratives translate into measurable patterns of sentiment, community formation, and opinion polarisation.
+The phenomenon under study is the \textbf{evolution of fan engagement} during a high-stakes
+Grand Slam, exploring how rivalry narratives translate into measurable patterns of sentiment,
+community formation and opinion polarisation.
 
 \section{Data}
 
-\subsection{Data Collection Strategy}
+\subsection{Collection strategy}
 
-Data were collected from \textbf{Bluesky} using its official \texttt{atproto} API. Because the Bluesky search endpoint does not guarantee exhaustive retrieval of all posts within a large time window, a \textbf{day-by-day crawling strategy} was implemented:
+Data were collected from Bluesky using its official \texttt{atproto} API
+(\texttt{src/crawler.py}). Because the search endpoint does not guarantee exhaustive retrieval
+over a large window, a \textbf{day-by-day} crawling strategy was used:
 
 \begin{itemize}
-    \item For each day from \texttt{2025-08-21} to \texttt{2025-09-10} (UTC), two separate queries were issued:
-    \begin{itemize}
-        \item \textbf{Sinner-oriented query}: \texttt{(jannik | sinner | Jannik | Sinner) (tennis | usopen | "us open" | alcaraz | Alcaraz | slam | match)}
-        \item \textbf{Alcaraz-oriented query}: \texttt{(alcaraz | Alcaraz) (tennis | usopen | "us open" | jannik | sinner | Jannik | Sinner | slam | match)}
-    \end{itemize}
-    \item Each day-window was searched independently, with a \textbf{limit of 5000 posts per day} to respect API rate limits while capturing high activity during the tournament.
-    \item A \textbf{polite sleep} (0.25\,s) was inserted between requests, and automatic retries with exponential backoff handled rate-limiting (HTTP 429).
-    \item Posts were \textbf{deduplicated} by URI after merging results from both queries.
+    \item For each 24-hour window from \texttt{2025-08-21} to \texttt{2025-09-10} (UTC), two
+    keyword queries were issued---one \textbf{Sinner-oriented} and one
+    \textbf{Alcaraz-oriented}---each capped at \textbf{5{,}000 posts/day} to respect rate limits
+    while capturing peak tournament activity.
+    \item A polite sleep was inserted between requests, and automatic retries with exponential
+    backoff handled HTTP 429 rate-limiting.
+    \item Results from both queries were merged and \textbf{deduplicated by post URI}.
 \end{itemize}
 
-\subsection{Dataset Description}
+\subsection{Dataset description}
 
-After crawling and deduplication, the final raw dataset contained \textbf{X posts} (exact count depends on the crawl – the pipeline expects \texttt{data/sinner\_alcaraz\_posts.csv}). For each post the following raw fields are stored:
+After crawling and deduplication the dataset contained \textbf{9{,}078 posts}. The raw schema
+(\texttt{data/sinner\_alcaraz\_posts.csv}) is summarised in Table~\ref{tab:rawfields}.
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \begin{tabular}{ll}
 \toprule
@@ -80,198 +111,302 @@ Field & Description \\
 \bottomrule
 \end{tabular}
 \caption{Raw data fields collected from Bluesky.}
+\label{tab:rawfields}
 \end{table}
 
-\subsection{Preprocessing \& Enrichment}
+\subsection{Preprocessing \& enrichment}
 
-The raw CSV is \textbf{irreversibly transformed} into a frozen enriched dataset (\texttt{data/sinner\_alcaraz\_processed.csv}) that serves as the single source of truth for all downstream analysis. The enrichment steps (implemented in \texttt{preprocessing.py}) include:
-
-\begin{itemize}
-    \item \textbf{Text cleaning} (HTML unescape, URL/handle removal, normalisation) and \textbf{lemmatisation} (spaCy + TweetTokenizer).
-    \item \textbf{RoBERTa sentiment} scoring using \texttt{cardiffnlp/twitter-roberta-base-sentiment-latest} – produces \texttt{sentiment\_category} (positive/neutral/negative) and a continuous \texttt{sentiment\_compound} (P(pos) – P(neg)).
-    \item \textbf{Emotion analysis} with two backends:
-    \begin{itemize}
-        \item \textbf{NRC lexicon} (NRCLex) yields scores for the 8 Plutchik emotions.
-        \item \textbf{GoEmotions (BERT)} – a RoBERTa model fine-tuned on 28 emotion labels, later collapsed onto the same 8 categories. Columns are prefixed \texttt{nrc\_} / \texttt{bert\_} when both backends are run.
-    \end{itemize}
-    \item \textbf{Named entity recognition} (spaCy) and \textbf{entity linking} to DBpedia – detects mentions of Sinner or Alcaraz.
-    \item \textbf{Post-level stance}: For posts mentioning only one player, the post's RoBERTa compound score is assigned to that player; for dual-mention posts, sentence-level sentiment is split between the two players.
-    \item \textbf{User-level stance aggregation}: For each user we compute:
-    \begin{itemize}
-        \item \texttt{mean\_sinner}, \texttt{mean\_alcaraz} (average stance per player)
-        \item \texttt{freq\_sinner}, \texttt{freq\_alcaraz} (share of mentions)
-        \item \(\text{net\_stance} = 0.5(\text{mean\_sinner} - \text{mean\_alcaraz}) + 0.15(\text{freq\_sinner} - \text{freq\_alcaraz})\) (the missing 0.35 weight is reserved for future emotion-based components)
-        \item \texttt{stance\_leaning} (sinner / alcaraz / neutral) based on a threshold (\(\pm 0.05\) by default).
-    \end{itemize}
-    \item \textbf{Author-level dominant emotion} (mode of post-level dominant emotion) for both backends, stored as \texttt{author\_dominant\_emotion\_nrc} and \texttt{author\_dominant\_emotion\_bert}.
-\end{itemize}
-
-After enrichment, the dataset contains > 50 columns, ready for network and stance analysis.
-
-\section{Models}
-
-The analytical pipeline is a \textbf{strict DAG} (see \texttt{main.py}) composed of four stages.
-
-\subsection{Social Network Construction (\texttt{social\_network\_analysis.py})}
+The raw CSV is transformed into a \textbf{frozen} enriched dataset
+(\texttt{data/sinner\_alcaraz\_processed.csv}, 44 columns) that serves as the single source of
+truth for all downstream stages. The enrichment (\texttt{src/preprocessing.py}) includes:
 
 \begin{itemize}
-    \item \textbf{Graphs}:  
-    \begin{itemize}
-        \item \textbf{Undirected graph} \(G_u\): nodes = users, edges = any interaction (reply OR mention) – weight counts interactions.  
-        \item \textbf{Directed graph} \(G_d\): edges preserve direction (from author to replied/mentioned user).
-    \end{itemize}
-    \item \textbf{Centrality measures} (computed on both graphs): degree centrality, closeness, betweenness, in-/out-degree, PageRank.
-    \item \textbf{Community detection}:
-    \begin{itemize}
-        \item \textbf{Louvain} on \(G_u\) (modularity optimisation) \(\rightarrow\) \texttt{node\_to\_louvain}.
-        \item \textbf{Infomap} on \(G_d\) (random-walk based) \(\rightarrow\) \texttt{node\_to\_infomap}.
-    \end{itemize}
-    \item \textbf{Filtered subgraphs} are extracted for visualisation and downstream stance analysis: only the largest connected components and top-\(k\) communities by post volume are kept.
+    \item \textbf{Text cleaning} (HTML unescape, URL/handle removal, normalisation) and
+    \textbf{lemmatisation} (spaCy + TweetTokenizer).
+    \item \textbf{RoBERTa sentiment} via
+    \texttt{cardiffnlp/twitter-roberta-base-sentiment-latest}, producing a
+    \texttt{sentiment\_category} (positive/neutral/negative) and a continuous
+    \texttt{sentiment\_compound} $= P(\text{pos}) - P(\text{neg})$.
+    \item \textbf{Emotion} with two backends: the \textbf{NRC lexicon} (NRCLex) over the 8
+    Plutchik emotions, and \textbf{GoEmotions} (\texttt{SamLowe/roberta-base-go\_emotions}),
+    whose 28 fine-grained labels are collapsed onto the same 8 categories for comparison.
+    \item \textbf{Named entity recognition} (spaCy) and \textbf{entity linking} to detect
+    mentions of Sinner or Alcaraz.
+    \item \textbf{Post- and user-level stance} (see Section~\ref{sec:stancemethod}).
 \end{itemize}
 
-\subsection{Sentiment \& Emotion Modelling (\texttt{preprocessing.py}, \texttt{social\_sentiment\_analysis.py})}
+\section{Methodology}
 
-\begin{itemize}
-    \item \textbf{RoBERTa sentiment}: Transformer-based classifier that maps each post to a continuous \texttt{compound} score in \([-1, 1]\) (positive – negative). This score is the primary signal for stance.
-    \item \textbf{NRC Emotion Lexicon}: Rule-based method that counts affect words in a text, producing a normalised frequency for each of the 8 emotions.
-    \item \textbf{GoEmotions (BERT)}: Fine-tuned RoBERTa model that outputs probabilities for 28 fine-grained labels; these are mapped to the 8 NRC categories (e.g., \textit{amusement}, \textit{excitement}, \textit{love} \(\rightarrow\) \textit{joy}). This provides a neural alternative to the lexicon-based NRC.
-    \item \textbf{Comparison} of the two emotion backends is performed by computing dominant emotion distributions side-by-side.
-\end{itemize}
+The analytical pipeline is a strict DAG (orchestrated by \texttt{main.py}).
 
-\subsection{Stance Analysis (\texttt{social\_stance\_analysis.py})}
+\subsection{Network construction}
 
-\begin{itemize}
-    \item \textbf{Post stance assignment} (already done during preprocessing) is reused.
-    \item \textbf{User stance aggregation} follows the weighted formula described in Section 2.3.
-    \item \textbf{Community stance profiles}: For each community, we calculate its size, mean net stance, deviation from global mean, dominant leaning, and homogeneity (fraction of members sharing the majority leaning).
-    \item \textbf{Polarisation metrics}:
-    \begin{itemize}
-        \item Stance assortativity (attribute assortativity coefficient on \texttt{stance\_leaning})
-        \item Cross-stance edge ratio (edges connecting a Sinner fan to an Alcaraz fan, excluding neutral)
-        \item Standard deviation of net stance scores
-    \end{itemize}
-    \item \textbf{Fanbase study}: Compares the refined stance (which includes sentiment) against a baseline frequency-only leaning. A confusion matrix and bar chart visualise transitions (e.g., users who mention Sinner more often but have negative sentiment toward him, thus end up classified as Alcaraz fans).
-\end{itemize}
+Nodes are users; edges are reply/mention interactions. Two graphs are built: an
+\textbf{undirected} graph $G_u$ (edge weight = interaction count) and a \textbf{directed} graph
+$G_d$ (author $\rightarrow$ replied/mentioned user). For both we compute degree, closeness and
+betweenness centrality, in-/out-degree and PageRank. Communities are detected with
+\textbf{Louvain} on $G_u$ and \textbf{Infomap} on $G_d$. \textbf{Filtered subgraphs} (connected
+components $\geq 10$ nodes, top communities by post volume) are used for visualisation and stance
+analysis.
 
-\subsection{Visualisation Framework}
+\subsection{Stance detection}
+\label{sec:stancemethod}
 
-A unified plotting helper (\texttt{render\_flat\_chart}) ensures consistent styling. The pipeline generates \textbf{> 20 plots}, including:
+Post-level stance assigns the RoBERTa compound score to the mentioned player for single-mention
+posts; dual-mention posts are split via sentence-level sentiment. User-level net stance fuses
+mean sentiment with mention frequency:
 
-\begin{itemize}
-    \item Network graphs coloured by community, dominant emotion, or fanbase (with node size proportional to degree/PageRank).
-    \item Community emotion profiles (bar plots of average emotion scores for the top communities).
-    \item Sentiment distribution (donut chart) and sentiment over time (line plot with post-volume shading).
-    \item Emotion backend comparison (grouped bar chart of dominant emotion shares).
-    \item Stance summary (4-panel figure: user counts, score histogram, community mean stances, polarisation metrics).
-    \item Word cloud of the whole community.
-\end{itemize}
+\[
+\text{net\_stance} = 0.50\,(\text{mean}_\text{sinner} - \text{mean}_\text{alcaraz})
+                   + 0.15\,(\text{freq}_\text{sinner} - \text{freq}_\text{alcaraz})
+\]
+
+(the remaining $0.35$ weight is reserved for a future emotion-based component). Users are
+labelled \texttt{sinner} / \texttt{alcaraz} / \texttt{neutral} with a $\pm 0.03$ threshold.
+Polarisation is measured via stance assortativity, the cross-stance edge ratio, and the standard
+deviation of net stance.
 
 \section{Results}
 
-\emph{Note: The exact numerical results depend on the crawled dataset. The following discussion is based on the logic implemented in the code and the expected patterns from a tennis rivalry discourse during a Grand Slam.}
+\subsection{Network structure \& communities}
 
-\subsection{Network Structure \& Communities}
+The interaction graph is \textbf{sparse but strongly modular}. Global metrics
+(Table~\ref{tab:global}) report a density of $\approx 0.002$ and very high community modularity
+(Louvain $\approx 0.97$, Infomap $\approx 0.94$): fans cluster tightly into fanbase-aligned
+groups rather than mixing. The giant connected component spans only \textbf{111 users
+($\approx$16.3\%)}, indicating that much of the conversation happens in small, loosely linked
+clusters.
 
-\begin{itemize}
-    \item The \textbf{global undirected graph} contains several hundred nodes (active users) with a \textbf{density} of around 0.01–0.03, typical for social interaction networks (sparse but not fragmented).
-    \item \textbf{Louvain} detects 8–12 communities, modularity \(Q \approx 0.35\)–0.45, indicating meaningful group structure. \textbf{Infomap} identifies a similar number of modules.
-    \item The \textbf{giant connected component} covers > 80\% of users, implying that the conversation is well-connected through replies and mentions.
-    \item \textbf{Degree centrality} correlates strongly with PageRank: influential users are often those who receive many replies/mentions (e.g., fan-accounts, journalists). Top-10 users by PageRank typically have \texttt{pagerank} > 0.02 and are labelled on the directed network plot.
-    \item \textbf{Community 196} (random ID) is a medium-sized cluster (\(\approx\)20 members) with high internal homogeneity – members are predominantly pro-Sinner or pro-Alcaraz. Its stance mean is \(+0.28\) (pro-Sinner) and homogeneity 0.85.
-\end{itemize}
+\begin{table}[H]
+\centering
+\begin{tabular}{lr}
+\toprule
+Metric & Value \\
+\midrule
+Density & 0.00203 \\
+Transitivity & 0.02022 \\
+Average clustering & 0.01120 \\
+Giant connected component (GCC) size & 111 \\
+GCC fraction of users & 0.1625 \\
+Louvain modularity & 0.9666 \\
+Infomap modularity & 0.9437 \\
+\bottomrule
+\end{tabular}
+\caption{Graph-level metrics (\texttt{data/network\_global\_metrics.csv}).}
+\label{tab:global}
+\end{table}
 
-\subsection{Sentiment \& Emotion Profiles}
+Figure~\ref{fig:netfanbase} shows the filtered undirected network coloured by fanbase leaning,
+with node size proportional to degree centrality. High-degree hubs are predominantly
+news/aggregator accounts (e.g.\ \texttt{tennisupdates}, \texttt{theathletic.com},
+\texttt{thetennisletter}), around which smaller fan clusters of mixed Sinner/Alcaraz/neutral
+leaning form. The same topology coloured by community and by dominant emotion is shown in
+Figure~\ref{fig:netgrid}.
 
-\begin{itemize}
-    \item \textbf{Overall sentiment} (donut chart) is skewed toward \textbf{positive} (\(\sim\)55\% positive, 30\% neutral, 15\% negative). This suggests that tennis fans on Bluesky tend to express encouragement, excitement, or praise rather than outright negativity.
-    \item \textbf{Sentiment over time} (line + shaded volume) shows peaks around key matches:
-    \begin{itemize}
-        \item After Alcaraz's Round-1 victory (25 Aug) sentiment for Alcaraz-leaning users spikes above \(+0.3\).
-        \item Sinner's straight-sets win in the Quarterfinals (3 Sep) triggers a strong positive sentiment for his fanbase (\(+0.4\)).
-        \item The final (7 Sep, Alcaraz wins) produces a \textbf{divergence}: Alcaraz fans' sentiment remains high (\(+0.35\)), while Sinner fans' sentiment drops to \(-0.1\).
-    \end{itemize}
-    \item \textbf{Emotion backend comparison} reveals:
-    \begin{itemize}
-        \item \textbf{NRC} assigns “trust” as the most frequent dominant emotion (\(\sim\)28\%), followed by “joy” (22\%).
-        \item \textbf{GoEmotions (BERT)} gives more weight to “anticipation” (\(\sim\)30\%) and “joy” (25\%), while “trust” is less frequent (12\%). This reflects the neural model's tendency to capture excitement about future matches.
-        \item Both backends agree that negative emotions (anger, fear, disgust) appear in only 5–10\% of posts.
-    \end{itemize}
-    \item \textbf{Community emotion profiles} show that communities dominated by one fanbase have distinct signatures:
-    \begin{itemize}
-        \item Pro-Sinner communities have elevated “trust” (confidence in his abilities) and “joy”.
-        \item Pro-Alcaraz communities show higher “anticipation” and “surprise” (reflecting his more unpredictable, flamboyant style).
-        \item Neutral communities are flatter across emotions.
-    \end{itemize}
-\end{itemize}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{filtered/network_graph_fanbase.png}
+\caption{Filtered undirected interaction network coloured by fanbase leaning (orange = Sinner,
+blue = Alcaraz, grey = neutral); node size $\propto$ degree centrality. Mixed-leaning clusters
+form around large aggregator/news hubs.}
+\label{fig:netfanbase}
+\end{figure}
 
-\subsection{Stance \& Polarisation}
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{filtered/network_graph.png}
+  \caption{Coloured by Louvain community.}
+\end{subfigure}\hfill
+\begin{subfigure}{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{filtered/network_graph_directed_fanbase.png}
+  \caption{Directed graph, coloured by fanbase.}
+\end{subfigure}
+\caption{Filtered network views. Left: community structure on $G_u$. Right: the directed
+reply/mention graph $G_d$ coloured by fanbase leaning. Full-resolution and emotion-coloured
+variants are also generated in \texttt{plots/} and \texttt{plots/filtered/}.}
+\label{fig:netgrid}
+\end{figure}
 
-\begin{itemize}
-    \item \textbf{User stance distribution} (after threshold \(\pm 0.05\)):
-    \begin{itemize}
-        \item \textbf{Pro-Sinner}: 38\% of users
-        \item \textbf{Pro-Alcaraz}: 34\%
-        \item \textbf{Neutral}: 28\%
-        \item This near-balance indicates a healthy rivalry with substantial neutral participants (casual fans, news bots).
-    \end{itemize}
-    \item \textbf{Polarisation metrics}:
-    \begin{itemize}
-        \item Stance assortativity = \(0.52\) (moderate to high) – users tend to connect with others who share their leaning.
-        \item Cross-stance edge ratio = \(0.11\) – only 11\% of edges directly connect a Sinner fan to an Alcaraz fan, confirming \textbf{echo-chamber} behaviour.
-        \item Standard deviation of net stance = \(0.31\), showing a wide spread of opinions.
-    \end{itemize}
-    \item \textbf{Fanbase study}:
-    \begin{itemize}
-        \item Baseline (frequency-only) classifies 45\% Sinner, 44\% Alcaraz, 11\% neutral.
-        \item Refined (sentiment-aware) moves \(\sim\)12\% of users from one partisan category to neutral or to the opposite side, because their posts expressed sentiment contradictory to their mention pattern (e.g., a user mentions Sinner often but with negative sentiment – becomes Alcaraz fan).
-        \item The overlap matrix shows that \textbf{sentiment information is crucial} to avoid misclassifying sarcastic or critical posts.
-    \end{itemize}
-\end{itemize}
+\subsection{Sentiment \& emotion profiles}
 
-\subsection{Diagnostic Insights}
+\paragraph{Overall sentiment.}
+The RoBERTa classifier labels the bulk of posts as \textbf{neutral (77.2\%)}, with
+\textbf{positive (16.2\%)} clearly outweighing \textbf{negative (6.6\%)}
+(Figure~\ref{fig:sentdist}). Among posts that do carry sentiment, the conversation skews
+positive---tennis fans express encouragement and praise far more often than hostility.
 
-The pipeline includes comprehensive diagnostics (sample dual-mention posts, sentiment distribution by mention type, threshold sensitivity, synthetic test). Key findings:
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.6\textwidth]{sentiment_distribution.png}
+\caption{Overall sentiment distribution (RoBERTa). Neutral dominates; positive posts outnumber
+negative roughly $2.5{:}1$.}
+\label{fig:sentdist}
+\end{figure}
 
-\begin{itemize}
-    \item \textbf{Dual-mention posts} (\(\sim\)15\% of dataset) have a mean absolute sentiment difference of \(0.24\) between the two players, confirming that sentence-level splitting produces plausible separate stances.
-    \item \textbf{Threshold sensitivity}: increasing the stance threshold from \(0.01\) to \(0.15\) increases the neutral fraction from 8\% to 52\%. The default \(0.05\) strikes a balance (28\% neutral) that avoids over-classification.
-    \item \textbf{Synthetic test} with perfectly polarised data yields 0\% neutral – confirming the stance computation logic works correctly; any neutral users in the real data come from genuine ambiguity or low engagement, not algorithmic failure.
-\end{itemize}
+\paragraph{Sentiment over time.}
+Figure~\ref{fig:senttime} plots daily average compound sentiment for each fanbase against post
+volume, annotated with tournament milestones. Sentiment is volatile and reacts to match
+outcomes: both fanbases swing around the rounds, and the lines \textbf{diverge around the final}
+(7~September, won by Alcaraz), while post volume builds towards the closing weekend.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{sentiment_over_time.png}
+\caption{Daily average RoBERTa sentiment for Sinner vs.\ Alcaraz fans (lines) against daily post
+volume (shaded), annotated with US Open milestones. Sentiment tracks the tournament and diverges
+by fanbase around the final.}
+\label{fig:senttime}
+\end{figure}
+
+\paragraph{Emotion backends.}
+Figure~\ref{fig:emobackend} compares dominant-emotion shares between the NRC lexicon and
+GoEmotions (BERT). Both agree that most posts are emotionally \emph{neutral}, but the neural
+backend is far more conservative (neutral $\approx$ 0.84 vs.\ NRC $\approx$ 0.57). NRC surfaces
+more \emph{anticipation}, \emph{fear} and \emph{trust}, whereas BERT distributes the remaining
+mass mainly across \emph{trust}, \emph{anticipation} and \emph{joy}. Crucially, both backends
+agree that negative emotions (anger, disgust) are rare---consistent with the sentiment donut.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{emotion_backend_comparison.png}
+\caption{Dominant emotion distribution: NRC lexicon vs.\ GoEmotions (BERT). The neural backend
+labels more posts neutral; the lexicon assigns more anticipation/fear/trust.}
+\label{fig:emobackend}
+\end{figure}
+
+\paragraph{Community emotion profiles.}
+Per-community emotion profiles (Figure~\ref{fig:commemo}) show that the largest Louvain
+communities share a positive affective signature---\emph{anticipation} and \emph{trust} dominate,
+with \emph{joy} present and negative emotions subdued---but differ in magnitude, reflecting
+varying engagement intensity. Profiles are generated for both community algorithms (Louvain,
+Infomap) and both emotion backends (NRC, BERT).
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{community_emotion_Louvain_nrc.png}
+  \caption{Louvain communities, NRC lexicon.}
+\end{subfigure}\hfill
+\begin{subfigure}{0.49\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{community_emotion_Infomap_bert.png}
+  \caption{Infomap communities, GoEmotions (BERT).}
+\end{subfigure}
+\caption{Average emotion profiles for the top communities. Anticipation and trust dominate across
+clusters; negative emotions stay low.}
+\label{fig:commemo}
+\end{figure}
+
+\subsection{Stance \& polarisation}
+
+The four-panel stance summary (Figure~\ref{fig:stancesummary}) gives the headline picture. Of
+\textbf{2{,}296 analysed users}, most are \textbf{neutral (1{,}080)}, followed by
+\textbf{Alcaraz (818)} and \textbf{Sinner (398)}---a tilt towards Alcaraz consistent with his
+final victory. Net stance scores are tightly concentrated around zero (score SD $= 0.227$), and
+the polarisation diagnostics are mild: stance assortativity is slightly \emph{negative}
+($-0.047$) and the cross-stance edge ratio is $0.108$. In other words, despite the high
+\emph{structural} modularity of the graph, users are \emph{not} strongly segregated by stance---
+fans of opposing players still interact (often via shared news hubs), so this is not a classic
+echo chamber.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{stance_analysis_summary.png}
+\caption{Stance analysis summary. Top-left: user stance counts (neutral 1080, Alcaraz 818,
+Sinner 398). Top-right: net-stance score histogram with $\pm0.03$ thresholds. Bottom-left:
+mean stance of top communities. Bottom-right: polarisation metrics (assortativity $-0.047$,
+cross-stance edge ratio $0.108$, score SD $0.227$).}
+\label{fig:stancesummary}
+\end{figure}
+
+\paragraph{Sentiment-aware vs.\ frequency baseline.}
+Figure~\ref{fig:fanbasecmp} contrasts a frequency-only baseline with the refined,
+sentiment-aware leaning. Folding RoBERTa sentiment into the stance moves users between classes:
+the Sinner camp shrinks from \textbf{454 to 398}, Alcaraz edges up from \textbf{814 to 818}, and
+neutral grows from \textbf{1{,}028 to 1{,}080}. The reclassified users are typically those who
+\emph{mention} a player frequently but \emph{express} sentiment inconsistent with that mention
+pattern (e.g.\ criticising the player they name most)---exactly the cases a raw mention count
+mislabels. This demonstrates the value of fusing sentiment with frequency rather than counting
+mentions alone.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{fanbase_classification_comparison.png}
+\caption{Fanbase classification: frequency-only baseline vs.\ sentiment-aware refinement.
+Sentiment reclassifies borderline users, shrinking the Sinner camp and growing the neutral pool.}
+\label{fig:fanbasecmp}
+\end{figure}
+
+\paragraph{Community vocabulary.}
+A word cloud over the whole community (Figure~\ref{fig:wordcloud}) is dominated by the players'
+names and tournament/tennis vocabulary, confirming that the crawl captured on-topic discourse.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{community_wordcloud.png}
+\caption{Word cloud of the community corpus---player names and US~Open/tennis vocabulary
+dominate.}
+\label{fig:wordcloud}
+\end{figure}
 
 \section{Discussion}
 
-\subsection{Interpretation of Findings}
+\subsection{Interpretation}
 
-The analysis paints a picture of a \textbf{vibrant but moderately polarised} online community. Bluesky users discussing Sinner vs. Alcaraz during the US Open 2025 exhibit:
+The analysis paints a picture of a \textbf{vibrant, on-topic, but only mildly polarised} online
+community:
 
 \begin{itemize}
-    \item \textbf{Emotion-driven engagement}: Dominant emotions are positive (trust, joy, anticipation), aligning with the celebratory nature of tennis fandom. Negative emotions are rare, suggesting that toxicity is limited – at least in this dataset.
-    \item \textbf{Sentiment tracking of match outcomes}: The sentiment time series clearly reflects tournament progression, with each player's fanbase reacting emotionally to wins and losses. The final produces a stark divergence, as expected.
-    \item \textbf{Echo-chambers}: The cross-stance edge ratio of only 11\% indicates that fans preferentially interact within their own camp. This is typical of sports rivalries but could limit exposure to opposing viewpoints.
-    \item \textbf{Value of sentiment-aware stance}: Relying solely on mention frequency would misclassify a significant fraction of users (e.g., those who mention an opponent but disparage them). Incorporating sentiment yields a more accurate reflection of genuine fan allegiance.
+    \item \textbf{Structurally fragmented, not opinion-segregated.} The graph is extremely modular
+    (Louvain $Q\approx0.97$) yet stance assortativity is near zero. Clustering is driven by
+    \emph{who replies to whom} (frequently shared news/aggregator hubs) more than by partisan
+    allegiance.
+    \item \textbf{Positive, low-toxicity tone.} Most posts are neutral; among sentiment-bearing
+    posts, positive outweighs negative $\approx 2.5{:}1$, and negative emotions (anger, disgust)
+    are rare under both emotion backends.
+    \item \textbf{Sentiment tracks the tournament.} The time series reacts to rounds and diverges
+    by fanbase around the final, illustrating how match outcomes drive emotional response.
+    \item \textbf{Sentiment-aware stance matters.} Refining a frequency baseline with sentiment
+    reclassifies a meaningful slice of users, correcting cases where mention frequency and
+    expressed sentiment disagree.
 \end{itemize}
 
-\subsection{Strengths of the Approach}
+\subsection{Strengths}
 
 \begin{itemize}
-    \item \textbf{Reproducible pipeline}: The DAG design with a frozen intermediate dataset ensures that any downstream stage can be rerun without recomputing expensive NLP.
-    \item \textbf{Multiple emotion backends}: Comparing NRC and GoEmotions provides robustness; the differences highlight which emotions are more sensitive to the scoring method.
-    \item \textbf{Fine-grained stance}: Sentence-level splitting for dual-mention posts preserves nuance that would be lost at post level.
-    \item \textbf{Extensive diagnostics}: The threshold sensitivity analysis and synthetic test build confidence in the classification thresholds.
+    \item \textbf{Reproducible DAG} with a frozen intermediate dataset, so any downstream stage
+    can be re-run without recomputing the expensive NLP enrichment (seeds fixed at 42).
+    \item \textbf{Two emotion backends} (lexicon vs.\ neural) provide robustness and expose how
+    sensitive emotion attribution is to the scoring method.
+    \item \textbf{Fine-grained stance} via sentence-level splitting of dual-mention posts.
 \end{itemize}
 
-\subsection{Limitations \& Future Work}
+\subsection{Limitations \& future work}
 
 \begin{itemize}
-    \item \textbf{Data completeness}: Bluesky's search API does not guarantee full recall. Some relevant posts (especially those without the keywords) may be missing.
-    \item \textbf{Sarcasm \& irony}: RoBERTa sentiment can still misinterpret sarcastic positive statements. Future work could incorporate sarcasm detection.
-    \item \textbf{Weight calibration}: The stance formula's weights (\(0.5\), \(0.15\), with \(0.35\) reserved) are heuristic. A data-driven optimisation (e.g., using labelled user stances) would improve accuracy.
-    \item \textbf{Temporal dynamics of communities}: Communities are static in this analysis. A dynamic community detection (over sliding windows) could reveal how fan clusters form and dissolve.
-    \item \textbf{Causal inference}: While we observe sentiment drops after a loss, we cannot prove causality. Controlled experiments or natural language generation would be needed.
+    \item \textbf{Recall.} The Bluesky search API does not guarantee exhaustive retrieval; posts
+    without the chosen keywords are missed.
+    \item \textbf{Sarcasm \& irony.} RoBERTa sentiment can misread sarcastic praise/criticism;
+    sarcasm detection is a natural extension.
+    \item \textbf{Weight calibration.} The stance weights ($0.50$, $0.15$, with $0.35$ reserved)
+    are heuristic; a data-driven fit against labelled stances would improve accuracy and let the
+    reserved emotion component be activated.
+    \item \textbf{Static communities.} Community detection is computed once over the whole window;
+    a temporal (sliding-window) analysis could reveal how clusters form and dissolve around
+    matches.
 \end{itemize}
 
 \subsection{Conclusion}
 
-This project successfully integrates \textbf{social network analysis}, \textbf{NLP-based sentiment/emotion mining}, and \textbf{stance detection} to characterise the Bluesky discourse around the Sinner–Alcaraz rivalry during the US Open 2025. The results reveal a moderately polarised community where positive emotions dominate, sentiment tracks match outcomes closely, and sentiment-aware stance classification significantly outperforms a naive frequency baseline. The pipeline is modular, reproducible, and can be adapted to other sports rivalries or social media platforms. The visualisations (network graphs, emotion profiles, stance summary) provide an intuitive narrative for both technical and non-technical audiences.
+By integrating social-network analysis, NLP-based sentiment/emotion mining and sentiment-aware
+stance detection, this project characterises the Bluesky discourse around the Sinner--Alcaraz
+rivalry at the 2025 US Open. The community is sparse and highly modular yet not opinion-segregated,
+its tone is neutral-to-positive, its sentiment tracks match outcomes, and a sentiment-aware
+stance classifier improves on a naive frequency baseline. The pipeline is modular and
+reproducible, and readily adapts to other rivalries or platforms.
 
 \end{document}
