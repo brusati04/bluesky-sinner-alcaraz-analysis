@@ -710,32 +710,3 @@ def plot_fanbase_study_comparison(
         print(f"[STANCE] Fanbase comparison plot saved to {output_dir}/fanbase_classification_comparison.png")
     except Exception as e:
         print(f"[STANCE] Fanbase comparison plotting failed: {e}")
-# Add to stance_analysis.py and call from main.py
-
-def print_community_196_posts(df: pd.DataFrame, Gu: nx.Graph, community_id: int = 196):
-    """Print all post texts from members of a specific community."""
-    
-    partition = nx.get_node_attributes(Gu, 'community')
-    if not partition:
-        print("No community partition found.")
-        return
-    
-    members = [node for node, comm in partition.items() if comm == community_id]
-    
-    if not members:
-        print(f"Community {community_id} not found.")
-        return
-    
-    comm_posts = df[df['author_handle'].isin(members)].copy()
-    comm_posts = comm_posts.sort_values('sentiment_compound')
-    
-    print(f"\nCommunity {community_id} — {len(members)} members, {len(comm_posts)} posts")
-    print("=" * 80)
-    
-    for i, (_, row) in enumerate(comm_posts.iterrows(), 1):
-        text = str(row['text']).replace('\n', ' ').replace('\r', '')
-        sentiment = row.get('sentiment_compound', 0)
-        author = row.get('author_handle', 'unknown')
-        print(f"\n[{i}/{len(comm_posts)}] [{sentiment:+.3f}] {author}")
-        _safe_print_text(text)
-        print("-" * 80)

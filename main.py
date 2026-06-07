@@ -191,9 +191,6 @@ def main() -> None:
     user_stances = stage_stance(df_processed, net)
     stage_sentiment(df_processed, net, user_stances)
 
-    print("[STANCE] Printing community 196 diagnostic posts...")
-    print_community_196_posts(df_processed, net["Gu_filtered"], community_id=196)
-
     print("\n>>> Social network analysis pipeline successfully completed.")
 
 
