@@ -51,6 +51,7 @@ custom_stopwords = set(stopwords.words('english')).union({'tennis', 'match', 'pl
 
 
 def clean_text(text: Optional[str]) -> str:
+    # remove links and @mentions to get cleaner text
     if pd.isna(text):
         return ""
     text = html.unescape(text)
@@ -60,6 +61,7 @@ def clean_text(text: Optional[str]) -> str:
 
 
 def clean_text_bert(text: Optional[str]) -> str:
+    # like clean_text but keeps placeholders because BERT wants them
     if pd.isna(text):
         return ""
     text = html.unescape(text)
@@ -72,7 +74,7 @@ def clean_text_bert(text: Optional[str]) -> str:
 
 
 def preprocess(text: Optional[str]) -> str:
-
+    # tokenize, lemmatize and drop stopwords to prepare text for analysis
     cleaned = clean_text(text)
     tokens = tokenizer.tokenize(cleaned.lower())
 
@@ -95,6 +97,7 @@ def preprocess(text: Optional[str]) -> str:
 
 
 def load_data(filepath: str, parse_linked_entities: bool = False) -> tuple[Optional[pd.DataFrame], Optional[dict]]:
+    # read the csv file into a dataframe and fix the columns
     for directory in ("data", "plots", "report"):
         os.makedirs(directory, exist_ok=True)
 
@@ -143,6 +146,7 @@ _emotion_clf_bert = None
 
 
 def _get_emotion_clf_bert():
+    # only load the BERT model once and reuse it after that
     global _emotion_clf_bert
     if _emotion_clf_bert is None:
         device = 0 if torch.cuda.is_available() else -1
@@ -159,6 +163,7 @@ def _get_emotion_clf_bert():
 
 
 def extract_ner(text: Optional[str]) -> list[tuple[str, str]]:
+    # use spaCy to find names of people, places and organizations
     if pd.isna(text) or text == "":
         return []
     ents = []
@@ -169,6 +174,7 @@ def extract_ner(text: Optional[str]) -> list[tuple[str, str]]:
 
 
 def link_entities_dbpedia(text: Optional[str], confidence: float = 0.5) -> list[dict]:
+    # check if the text talks about Sinner or Alcaraz using keywords
     if not text or pd.isna(text) or str(text).strip() == "":
         return []
 
@@ -182,6 +188,7 @@ def link_entities_dbpedia(text: Optional[str], confidence: float = 0.5) -> list[
 
 
 def score_emotions(text: str) -> dict[str, float]:
+    # give the text an emotion score using the NRC lexicon
     try:
         if not text or pd.isna(text) or str(text).strip() == "":
             return {e: 0.0 for e in NRC_EMOTIONS}
@@ -198,6 +205,7 @@ def score_emotions(text: str) -> dict[str, float]:
 
 
 def add_emotion_columns(df: pd.DataFrame, text_col: str = 'cleaned_text', backend: str = "nrc") -> pd.DataFrame:
+    # add one column per emotion to the dataframe
     prefix = f"{backend}_emotion_"
     dom_col = f"{backend}_dominant_emotion"
     if backend == "bert":
@@ -256,12 +264,14 @@ def add_emotion_columns(df: pd.DataFrame, text_col: str = 'cleaned_text', backen
 
 
 def derive_player_sentiment_scores(df: pd.DataFrame) -> dict[str, list[float]]:
+    # split the sentiment scores into two lists, one for each player
     sinner_scores = df.loc[df['is_sinner'], 'sentiment_compound'].tolist()
     alcaraz_scores = df.loc[df['is_alcaraz'], 'sentiment_compound'].tolist()
     return {"sinner_scores": sinner_scores, "alcaraz_scores": alcaraz_scores}
 
 
 def run_nlp_enrichment(df: pd.DataFrame, output_filepath: str = "data/sinner_alcaraz_processed.csv", emotion_backend: str = "both") -> dict:
+    # the main function that runs all the NLP steps one by one
     df = df.copy()
     total_posts = len(df)
     print(f"[NLP] Starting BERT/RoBERTa NLP enrichment for {total_posts} posts...")
@@ -320,6 +330,7 @@ def run_nlp_enrichment(df: pd.DataFrame, output_filepath: str = "data/sinner_alc
 
 
 def _sentence_sentiment(sentence: str) -> float:
+    # get a positive/negative score for a single sentence
     if not sentence or not sentence.strip():
         return 0.0
 
@@ -342,6 +353,7 @@ def _sentence_sentiment(sentence: str) -> float:
 
 
 def _sentence_mentions(sentence: str) -> tuple[bool, bool]:
+    # check which players are mentioned in this sentence
     text_lower = sentence.lower()
     has_sinner = any(kw in text_lower for kw in SINNER_KEYWORDS)
     has_alcaraz = any(kw in text_lower for kw in ALCARAZ_KEYWORDS)
@@ -349,6 +361,7 @@ def _sentence_mentions(sentence: str) -> tuple[bool, bool]:
 
 
 def _split_dual_mention(text: str, sentence_scores: dict[str, float]) -> tuple[float, float]:
+    # when a post mentions both players, share the sentiment between them
     sentences = sent_tokenize(str(text))
 
     sinner_scores = []
@@ -376,6 +389,7 @@ def _split_dual_mention(text: str, sentence_scores: dict[str, float]) -> tuple[f
 
 
 def detect_players(df: pd.DataFrame) -> pd.DataFrame:
+    # add true/false columns telling if each post mentions the players
     if 'is_sinner' in df.columns and 'is_alcaraz' in df.columns:
         return df
 
@@ -388,6 +402,7 @@ def detect_players(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def compute_post_stances(df: pd.DataFrame) -> pd.DataFrame:
+    # work out how each post leans towards Sinner or Alcaraz
     compound = df['sentiment_compound'].fillna(0)
 
     single_sinner = df['is_sinner'] & ~df['is_alcaraz']
@@ -482,6 +497,7 @@ def compute_post_stances(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def compute_user_stances(df: pd.DataFrame, min_posts: int = MIN_POSTS_FOR_STANCE) -> pd.DataFrame:
+    # group the posts by user to get an overall stance for each person
     df = df.copy()
     if 'emotion_sinner' not in df.columns:
         df['emotion_sinner'] = 0.0
@@ -525,6 +541,7 @@ def compute_user_stances(df: pd.DataFrame, min_posts: int = MIN_POSTS_FOR_STANCE
 
 
 def classify_stances(user_stances: pd.DataFrame, threshold: float = STANCE_THRESHOLD) -> pd.DataFrame:
+    # turn the stance number into a label: sinner, alcaraz or neutral
     def label(score):
         if score > threshold:
             return 'sinner'
@@ -545,6 +562,7 @@ def classify_stances(user_stances: pd.DataFrame, threshold: float = STANCE_THRES
 
 
 def prepare_dataset(raw_filepath: str, processed_filepath: str) -> tuple[Optional[pd.DataFrame], Optional[dict]]:
+    # load the processed file if we already have it, otherwise build it
     df = None
     did_to_handle = None
     if os.path.exists(processed_filepath):
@@ -592,8 +610,7 @@ def prepare_dataset(raw_filepath: str, processed_filepath: str) -> tuple[Optiona
 
 
 def plot_community_wordcloud(df: pd.DataFrame, output_dir: str = "plots") -> None:
-
-    
+    # make a word cloud picture from all the posts
     if 'preprocessed_text' not in df.columns:
         print("Warning: 'preprocessed_text' column not found. Skipping word cloud.")
         return
