@@ -22,8 +22,17 @@
   citecolor=blue!50!black
 }
 
-\title{Sinner--Alcaraz on Bluesky:\\ A Social Network \& Sentiment Analysis of the 2025 US Open}
-\author{Project Report}
+\title{\textbf{Project Report}: \\ Sinner--Alcaraz on Bluesky:\\ A Social Network \& Sentiment Analysis of the 2025 US Open}
+\author{%
+  Brusati Lorenzo \\
+  \small \href{mailto:lorenzo.brusati01@universitadipavia.it}{\texttt{lorenzo.brusati01@universitadipavia.it}}%
+  \and
+  Cinquemani Lorenzo \\
+  \small \href{mailto:lorenzo.cinquemani01@universitadipavia.it}{\texttt{lorenzo.cinquemani01@universitadipavia.it}}%
+  \and
+  Goatelli Lorenzo \\
+  \small \href{mailto:lorenzo.goatelli01@universitadipavia.it}{\texttt{lorenzo.goatelli01@universitadipavia.it}}%
+}
 \date{\today}
 
 \begin{document}
@@ -44,8 +53,11 @@ and a \emph{sentiment-aware stance classifier} that meaningfully reclassifies us
 a naive mention-frequency baseline.
 \end{abstract}
 
+\newpage
+
 \tableofcontents
-\bigskip
+
+\newpage
 
 \section{Objective}
 
@@ -68,6 +80,8 @@ during the 2025 US Open. Concretely the analysis aims to:
 The phenomenon under study is the \textbf{evolution of fan engagement} during a high-stakes
 Grand Slam, exploring how rivalry narratives translate into measurable patterns of sentiment,
 community formation and opinion polarisation.
+
+\bigskip
 
 \section{Data}
 
@@ -135,6 +149,8 @@ truth for all downstream stages. The enrichment (\texttt{src/preprocessing.py}) 
     \item \textbf{Post- and user-level stance} (see Section~\ref{sec:stancemethod}).
 \end{itemize}
 
+\bigskip
+
 \section{Methodology}
 
 The analytical pipeline is a strict DAG (orchestrated by \texttt{main.py}).
@@ -165,6 +181,8 @@ mean sentiment with mention frequency:
 labelled \texttt{sinner} / \texttt{alcaraz} / \texttt{neutral} with a $\pm 0.03$ threshold.
 Polarisation is measured via stance assortativity, the cross-stance edge ratio, and the standard
 deviation of net stance.
+
+\bigskip
 
 \section{Results}
 
@@ -352,6 +370,8 @@ names and tournament/tennis vocabulary, confirming that the crawl captured on-to
 dominate.}
 \label{fig:wordcloud}
 \end{figure}
+
+\bigskip
 
 \section{Discussion}
 
