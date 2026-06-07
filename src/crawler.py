@@ -18,8 +18,6 @@ def create_client() -> Client:
     if not handle or not app_password:
         raise EnvironmentError(
             "Missing Bluesky credentials"
-            "Set BSKY_HANDLE and BSKY_APP_PASSWORD as environment variables "
-            "or create a .env file. See .env.example for the required format."
         )
 
     client = Client()
