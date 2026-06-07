@@ -92,8 +92,6 @@ over a large window, a \textbf{day-by-day} crawling strategy was used:
     keyword queries were issued---one \textbf{Sinner-oriented} and one
     \textbf{Alcaraz-oriented}---each capped at \textbf{5{,}000 posts/day} to respect rate limits
     while capturing peak tournament activity.
-    \item A polite sleep was inserted between requests, and automatic retries with exponential
-    backoff handled HTTP 429 rate-limiting.
     \item Results from both queries were merged and deduplicated by post URI.
 \end{itemize}
 
@@ -126,7 +124,7 @@ Field & Description \\
 
 \subsection{Preprocessing \& enrichment}
 
-The raw CSV is transformed into a \textbf{frozen} enriched dataset
+The raw CSV goes through a preprocessing phase to be transformed into an enriched dataset
 (\texttt{data/sinner\_alcaraz\_processed.csv}, 44 columns) that serves as the single source of
 truth for all downstream stages. The enrichment (\texttt{src/preprocessing.py}) includes:
 
