@@ -1,6 +1,6 @@
 # Fdb version 4
-["pdflatex"] 1780826443.43855 "/Users/lorenzocinquemani/Documents/GitHub/bluesky-sinner-alcaraz-analysis/report/report.tex" "report.pdf" "report" 1780826454.52472 0
-  "/Users/lorenzocinquemani/Documents/GitHub/bluesky-sinner-alcaraz-analysis/report/report.tex" 1780826427.23874 20328 a6636ee97be75db97ca5298349496a17 ""
+["pdflatex"] 1780826570.18312 "/Users/lorenzocinquemani/Documents/GitHub/bluesky-sinner-alcaraz-analysis/report/report.tex" "report.pdf" "report" 1780826584.63777 0
+  "/Users/lorenzocinquemani/Documents/GitHub/bluesky-sinner-alcaraz-analysis/report/report.tex" 1780826573.67258 20329 7ccae04031b3fd14d919a06a8a436466 ""
   "/Users/lorenzocinquemani/Library/TinyTeX/texmf-dist/fonts/tfm/jknappen/ec/ecbx1095.tfm" 1136768653 3584 21b378cca2e40816b0e6d74a4dc98f04 ""
   "/Users/lorenzocinquemani/Library/TinyTeX/texmf-dist/fonts/tfm/jknappen/ec/ecbx1200.tfm" 1136768653 3584 402da0b29eafbad07963b1224b222f18 ""
   "/Users/lorenzocinquemani/Library/TinyTeX/texmf-dist/fonts/tfm/jknappen/ec/ecbx1440.tfm" 1136768653 3584 13049b61b922a28b158a38aeff75ee9b ""
@@ -122,10 +122,10 @@
   "filtered/network_graph.png" 1780766153.52225 413682 89c8cc1a5f0e921e75967ecd96430e34 ""
   "filtered/network_graph_directed_fanbase.png" 1780766153.53783 336627 749a1bd95c89ca69991d6b11a9b324fa ""
   "filtered/network_graph_fanbase.png" 1780766153.54969 438764 2367eea1c4ba530d31674cab2060527a ""
-  "report.aux" 1780826454.22311 8489 cebfbd46d7b1ac83eed23352a5a04b2a "pdflatex"
-  "report.out" 1780826454.22563 2411 579a6ad7ba9321723f73bd0175ce25ee "pdflatex"
-  "report.tex" 1780826427.23874 20328 a6636ee97be75db97ca5298349496a17 ""
-  "report.toc" 1780826454.22643 1783 9613d97f1a8cb56449d67d0dd7fe299d "pdflatex"
+  "report.aux" 1780826584.27923 8489 cebfbd46d7b1ac83eed23352a5a04b2a "pdflatex"
+  "report.out" 1780826584.29057 2411 579a6ad7ba9321723f73bd0175ce25ee "pdflatex"
+  "report.tex" 1780826573.67258 20329 7ccae04031b3fd14d919a06a8a436466 ""
+  "report.toc" 1780826584.29137 1783 9613d97f1a8cb56449d67d0dd7fe299d "pdflatex"
   "sentiment_distribution.png" 1780766153.71112 132860 d4548e77d5b0e0a66587fb15614a8ebf ""
   "sentiment_over_time.png" 1780766153.71459 585586 0371f8ccf8b47c050121e97379d2f712 ""
   "stance_analysis_summary.png" 1780823008.15735 423497 03a55a6d4fd64101c934dcaa840d33c0 ""

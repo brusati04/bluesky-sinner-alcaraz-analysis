@@ -151,8 +151,8 @@ The analytical pipeline is a strict DAG (orchestrated by \texttt{main.py}).
 
 \subsection{Network construction}
 
-Two graphs are built: an
-\textbf{undirected} graph $G_u$ (edge weight = interaction count) and a \textbf{directed} graph
+Two graphs are built: 
+\\an \textbf{undirected} graph $G_u$ (edge weight = interaction count) and a \textbf{directed} graph
 $G_d$ (author $\rightarrow$ replied/mentioned user). For both we compute degree, closeness and
 betweenness centrality, in-/out-degree and PageRank. Communities are detected with
 \textbf{Louvain} on $G_u$ and \textbf{Infomap} on $G_d$. \textbf{Filtered subgraphs} (we selected the top 5 largest communities) are used for visualisation and stance
