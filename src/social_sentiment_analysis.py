@@ -292,9 +292,7 @@ def plot_sentiment_over_time(df: pd.DataFrame, output_dir: str = "plots", user_s
     # Import and annotate US Open 2025 key match events from utils
     from utils import US_OPEN_EVENTS
 
-    # Force drawing/scaling so we can read the correct Y limits on the primary axis
-    ax1.relim()
-    ax1.autoscale_view()
+    ax1.set_ylim(-0.1, 0.5)
     ymin, ymax = ax1.get_ylim()
     text_y = ymax - (ymax - ymin) * 0.08
 

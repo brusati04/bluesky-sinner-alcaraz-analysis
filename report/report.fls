@@ -194,6 +194,13 @@ INPUT C:\Users\loryb\AppData\Local\Programs\MiKTeX\fonts\tfm\jknappen\ec\ecbx144
 INPUT C:\Users\loryb\AppData\Local\Programs\MiKTeX\fonts\tfm\jknappen\ec\ectt1200.tfm
 INPUT C:\Users\loryb\AppData\Local\Programs\MiKTeX\fonts\tfm\jknappen\ec\ecrm0800.tfm
 INPUT C:\Users\loryb\AppData\Local\Programs\MiKTeX\fonts\tfm\jknappen\ec\ecrm0600.tfm
+INPUT .\community_wordcloud.png
+INPUT .\community_wordcloud.png
+INPUT .\community_wordcloud.png
+INPUT .\community_wordcloud.png
+INPUT .\community_wordcloud.png
+INPUT .\community_wordcloud.png
+INPUT .\community_wordcloud.png
 INPUT .\filtered\network_graph_fanbase.png
 INPUT .\filtered\network_graph_fanbase.png
 INPUT .\filtered\network_graph_fanbase.png
@@ -265,13 +272,6 @@ INPUT .\fanbase_classification_comparison.png
 INPUT .\fanbase_classification_comparison.png
 INPUT .\fanbase_classification_comparison.png
 INPUT .\fanbase_classification_comparison.png
-INPUT .\community_wordcloud.png
-INPUT .\community_wordcloud.png
-INPUT .\community_wordcloud.png
-INPUT .\community_wordcloud.png
-INPUT .\community_wordcloud.png
-INPUT .\community_wordcloud.png
-INPUT .\community_wordcloud.png
 INPUT report.aux
 INPUT .\report.out
 INPUT .\report.out
