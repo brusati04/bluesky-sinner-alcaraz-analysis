@@ -151,14 +151,17 @@ The analytical pipeline is a strict DAG (orchestrated by \texttt{main.py}).
 
 \subsection{Network construction}
 
-Two graphs are built: 
-\\- an \textbf{undirected} graph $G_u$ (edge weight = interaction count) 
-\\- a \textbf{directed} graph
-$G_d$ (author $\rightarrow$ replied/mentioned user). 
-\\For both we compute degree, closeness and
-betweenness centrality, in-/out-degree and PageRank. Communities are detected with
-\textbf{Louvain} on $G_u$ and \textbf{Infomap} on $G_d$. \textbf{Filtered subgraphs} (we selected the top 5 largest communities) are used for visualisation and stance
-analysis.
+Two graphs are built:
+\begin{itemize}
+    \item an undirected graph $G_u$, where the edge weight is the number of interactions between users;
+    \item a directed graph $G_d$ that captures the flow of communication from an author to the exact user they are replying to or mentioning.
+\end{itemize}
+
+For both, we compute degree, closeness and betweenness centrality, in-/out-degree, and PageRank.
+
+To understand how these users naturally cluster together, we apply the Louvain community detection algorithm to the undirected graph, while using the Infomap algorithm to detect communities within the directed graph.
+
+Filtered subgraphs (we selected the top 5 largest communities) are used for visualisation and stance analysis.
 
 \subsection{Stance detection}
 \label{sec:stancemethod}
@@ -168,9 +171,9 @@ posts; dual-mention posts are split via sentence-level sentiment. Similarly, pos
 User-level net stance fuses mean sentiment, mention frequency, and mean emotion stance:
 
 \[
-\text{net\_stance} = 0.50\,(\text{mean}_\text{sinner} - \text{mean}_\text{alcaraz})
-                   + 0.15\,(\text{freq}_\text{sinner} - \text{freq}_\text{alcaraz})
-                   + 0.35\,(\text{mean\_emo}_\text{sinner} - \text{mean\_emo}_\text{alcaraz})
+\text{net\_stance} = 0.50\,(\text{mean}_\text{s} - \text{mean}_\text{a})
+                   + 0.15\,(\text{freq}_\text{s} - \text{freq}_\text{a})
+                   + 0.35\,(\text{mean\_emo}_\text{s} - \text{mean\_emo}_\text{a})
 \]
 
 Users are labelled \texttt{sinner} / \texttt{alcaraz} / \texttt{neutral} with a $\pm 0.05$ threshold.
