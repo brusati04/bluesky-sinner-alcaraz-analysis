@@ -481,7 +481,6 @@ def plot_network_graphs_by_fanbase(
                        {n: n for n in subG.nodes() if n in top_10}, "Undirected Social Network Graph — Fanbase Leaning\n(node size proportional to degree centrality)",
                        "network_graph_fanbase.png", output_dir, legend_patches, "Fanbase Leaning", legend_ncol=1)
 
-    # Directed
     nodes_dir = [n for n, d in Gd.degree() if d > 0]
     if nodes_dir:
         subG_dir = Gd.subgraph(nodes_dir)
