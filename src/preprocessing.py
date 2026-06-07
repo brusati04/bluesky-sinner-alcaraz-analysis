@@ -154,7 +154,7 @@ W_EMOTION = 0.35
 W_FREQUENCY = 0.15
 
 # Stance-computation configuration (owned by the enrichment stage).
-STANCE_THRESHOLD = 0.03
+STANCE_THRESHOLD = 0.05
 MIN_POSTS_FOR_STANCE = 1
 DEBUG = True
 
