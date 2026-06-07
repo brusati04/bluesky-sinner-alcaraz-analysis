@@ -122,7 +122,7 @@ Field & Description \\
 \label{tab:rawfields}
 \end{table}
 
-\subsection{Preprocessing \& enrichment}
+\subsection{Preprocessing}
 
 The raw CSV goes through a preprocessing phase to be transformed into an enriched dataset
 (\texttt{data/sinner\_alcaraz\_processed.csv}, 44 columns) that serves as the single source of
@@ -290,8 +290,8 @@ chains that the undirected view (right) blends together.}
 \label{fig:netcompare_filtered}
 \end{figure}
 
-\subsection{Overall sentiment}
-\label{sec:sentresults}
+\subsection{Social Sentiment Analysis}
+\label{sec:sentimentresults}
 
 The RoBERTa classifier labels the corpus as overwhelmingly \textbf{neutral}
 (Figure~\ref{fig:sentdist}): \textbf{77.2\%} of posts are neutral, \textbf{16.2\%} positive and
@@ -306,8 +306,8 @@ negative.}
 \label{fig:sentdist}
 \end{figure}
 
-\subsection{Social Sentiment Analysis}
-\label{sec:emoresults}
+\subsubsection{Emotion Analysis: NRCLex vs GoEmotions}
+\label{sec:emotionresults}
 
 Comparing the two emotion backends exposes a decisive advantage of the transformer model
 (Figure~\ref{fig:emocompare}). NRCLex is a \textbf{bag-of-words} model: it looks up each word
@@ -399,15 +399,7 @@ per-community mean stance, and polarisation metrics.}
 Relying on mention frequency alone misclassifies users, because mentioning a player frequently
 says nothing about whether the user \emph{supports} or \emph{criticises} that player. Fusing
 sentiment with frequency is therefore methodologically essential to capture true support versus
-criticism; Figure~\ref{fig:fanbasecompare} contrasts the frequency-only baseline with the
-sentiment-aware classification and shows how the latter reassigns a substantial share of users.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.85\textwidth]{fanbase_classification_comparison.png}
-\caption{Fanbase classification: frequency-only baseline vs.\ the sentiment-aware fused stance.}
-\label{fig:fanbasecompare}
-\end{figure}
+criticism.
 
 Projecting the fused stance onto the directed graph (Figure~\ref{fig:netfanbase}) makes the
 spatial organisation of support explicit. Nodes coloured \textbf{orange} indicate a stance
@@ -423,7 +415,7 @@ light = neutral); node size $\propto$ PageRank prestige.}
 \label{fig:netfanbase}
 \end{figure}
 
-\subsection{Sentiment dynamics over time}
+\subsubsection{Sentiment dynamics over time}
 \label{sec:timeresults}
 
 Tracking daily average sentiment against post volume across the tournament

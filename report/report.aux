@@ -9,7 +9,7 @@
 \@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Raw data fields collected from Bluesky.}}{4}{table.caption.2}\protected@file@percent }
 \providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
 \newlabel{tab:rawfields}{{1}{4}{Raw data fields collected from Bluesky}{table.caption.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Preprocessing \& enrichment}{4}{subsection.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Preprocessing}{4}{subsection.2.3}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{Community vocabulary.}{4}{section*.3}\protected@file@percent }
 \@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Word cloud of the community corpus---player names and US~Open/tennis vocabulary dominate.}}{5}{figure.caption.4}\protected@file@percent }
 \newlabel{fig:wordcloud}{{1}{5}{Word cloud of the community corpus---player names and US~Open/tennis vocabulary dominate}{figure.caption.4}{}}
@@ -34,12 +34,12 @@
 \newlabel{sub@fig:undirected_f}{{b}{8}{Filtered undirected graph (Louvain)}{figure.caption.7}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Filtered top-5 communities: the directed view (left) exposes distinct hub-centred chains that the undirected view (right) blends together.}}{8}{figure.caption.7}\protected@file@percent }
 \newlabel{fig:netcompare_filtered}{{3}{8}{Filtered top-5 communities: the directed view (left) exposes distinct hub-centred chains that the undirected view (right) blends together}{figure.caption.7}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Overall sentiment}{8}{subsection.4.2}\protected@file@percent }
-\newlabel{sec:sentresults}{{4.2}{8}{Overall sentiment}{subsection.4.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Social Sentiment Analysis}{8}{subsection.4.2}\protected@file@percent }
+\newlabel{sec:sentimentresults}{{4.2}{8}{Social Sentiment Analysis}{subsection.4.2}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Overall sentiment distribution (RoBERTa): 77.2\% neutral, 16.2\% positive, 6.6\% negative.}}{8}{figure.caption.8}\protected@file@percent }
 \newlabel{fig:sentdist}{{4}{8}{Overall sentiment distribution (RoBERTa): 77.2\% neutral, 16.2\% positive, 6.6\% negative}{figure.caption.8}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Social Sentiment Analysis}{8}{subsection.4.3}\protected@file@percent }
-\newlabel{sec:emoresults}{{4.3}{8}{Social Sentiment Analysis}{subsection.4.3}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.1}Emotion Analysis: NRCLex vs GoEmotions}{8}{subsubsection.4.2.1}\protected@file@percent }
+\newlabel{sec:emotionresults}{{4.2.1}{8}{Emotion Analysis: NRCLex vs GoEmotions}{subsubsection.4.2.1}{}}
 \newlabel{fig:emonrc}{{5a}{9}{Per-community emotion profiles (NRC lexicon)}{figure.caption.9}{}}
 \newlabel{sub@fig:emonrc}{{a}{9}{Per-community emotion profiles (NRC lexicon)}{figure.caption.9}{}}
 \newlabel{fig:emobert}{{5b}{9}{Per-community emotion profiles (GoEmotions/BERT)}{figure.caption.9}{}}
@@ -50,24 +50,22 @@
 \newlabel{fig:emobackend}{{6}{9}{Dominant emotion distribution: NRC vs.\ GoEmotions (BERT). BERT removes the spurious \texttt {fear} peak induced by the ``sinner''$\to $``sin'' lexical confusion and concentrates the distribution on \texttt {neutral}}{figure.caption.10}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Directed social network coloured by dominant emotion (BERT); node size $\propto $ PageRank prestige.}}{10}{figure.caption.11}\protected@file@percent }
 \newlabel{fig:netemotion}{{7}{10}{Directed social network coloured by dominant emotion (BERT); node size $\propto $ PageRank prestige}{figure.caption.11}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Social Stance Analysis}{10}{subsection.4.4}\protected@file@percent }
-\newlabel{sec:stanceresults}{{4.4}{10}{Social Stance Analysis}{subsection.4.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Social Stance Analysis}{10}{subsection.4.3}\protected@file@percent }
+\newlabel{sec:stanceresults}{{4.3}{10}{Social Stance Analysis}{subsection.4.3}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Stance analysis summary: user stance distribution, net-stance score distribution, per-community mean stance, and polarisation metrics.}}{11}{figure.caption.12}\protected@file@percent }
 \newlabel{fig:stancesummary}{{8}{11}{Stance analysis summary: user stance distribution, net-stance score distribution, per-community mean stance, and polarisation metrics}{figure.caption.12}{}}
 \@writefile{toc}{\contentsline {paragraph}{Why mention frequency alone is not enough.}{11}{section*.13}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Fanbase classification: frequency-only baseline vs.\ the sentiment-aware fused stance.}}{11}{figure.caption.14}\protected@file@percent }
-\newlabel{fig:fanbasecompare}{{9}{11}{Fanbase classification: frequency-only baseline vs.\ the sentiment-aware fused stance}{figure.caption.14}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces Directed social network coloured by fanbase leaning (orange = Sinner, blue = Alcaraz, light = neutral); node size $\propto $ PageRank prestige.}}{12}{figure.caption.15}\protected@file@percent }
-\newlabel{fig:netfanbase}{{10}{12}{Directed social network coloured by fanbase leaning (orange = Sinner, blue = Alcaraz, light = neutral); node size $\propto $ PageRank prestige}{figure.caption.15}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Sentiment dynamics over time}{12}{subsection.4.5}\protected@file@percent }
-\newlabel{sec:timeresults}{{4.5}{12}{Sentiment dynamics over time}{subsection.4.5}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {11}{\ignorespaces Sentiment trajectory and post volume over time (US~Open 2025): daily average RoBERTa sentiment (lines) vs.\ post volume by fanbase leaning (shaded), annotated with tournament milestones.}}{13}{figure.caption.16}\protected@file@percent }
-\newlabel{fig:senttime}{{11}{13}{Sentiment trajectory and post volume over time (US~Open 2025): daily average RoBERTa sentiment (lines) vs.\ post volume by fanbase leaning (shaded), annotated with tournament milestones}{figure.caption.16}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Directed social network coloured by fanbase leaning (orange = Sinner, blue = Alcaraz, light = neutral); node size $\propto $ PageRank prestige.}}{12}{figure.caption.14}\protected@file@percent }
+\newlabel{fig:netfanbase}{{9}{12}{Directed social network coloured by fanbase leaning (orange = Sinner, blue = Alcaraz, light = neutral); node size $\propto $ PageRank prestige}{figure.caption.14}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.3.1}Sentiment dynamics over time}{12}{subsubsection.4.3.1}\protected@file@percent }
+\newlabel{sec:timeresults}{{4.3.1}{12}{Sentiment dynamics over time}{subsubsection.4.3.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces Sentiment trajectory and post volume over time (US~Open 2025): daily average RoBERTa sentiment (lines) vs.\ post volume by fanbase leaning (shaded), annotated with tournament milestones.}}{13}{figure.caption.15}\protected@file@percent }
+\newlabel{fig:senttime}{{10}{13}{Sentiment trajectory and post volume over time (US~Open 2025): daily average RoBERTa sentiment (lines) vs.\ post volume by fanbase leaning (shaded), annotated with tournament milestones}{figure.caption.15}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {5}Discussion}{13}{section.5}\protected@file@percent }
 \newlabel{sec:discussion}{{5}{13}{Discussion}{section.5}{}}
-\@writefile{toc}{\contentsline {paragraph}{Structural-topological level.}{13}{section*.17}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Emotional level.}{14}{section*.18}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Methodological contribution.}{14}{section*.19}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Limitations and future work.}{14}{section*.20}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Structural-topological level.}{13}{section*.16}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Emotional level.}{13}{section*.17}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Methodological contribution.}{14}{section*.18}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Limitations and future work.}{14}{section*.19}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Conclusion}{14}{subsection.5.1}\protected@file@percent }
 \gdef \@abspage@last{14}
