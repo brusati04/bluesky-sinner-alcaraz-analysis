@@ -3,7 +3,7 @@ import ast
 import json
 from typing import Any, Union, Optional
 
-# Set custom Hugging Face cache directory to avoid permissions/lock issues in user home directory
+
 workspace_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.environ["HF_HOME"] = os.path.abspath(os.path.join(workspace_path, ".huggingface_cache"))
 
@@ -16,8 +16,6 @@ ALCARAZ_URI = "http://dbpedia.org/resource/Carlos_Alcaraz"
 SINNER_KEYWORDS = {"sinner", "jannik"}
 ALCARAZ_KEYWORDS = {"alcaraz", "carlos", "carlitos"}
 
-# The 8 primary NRC emotion categories. Shared by the preprocessing/enrichment
-# stage (emotion scoring) and the sentiment stage (emotion plotting).
 NRC_EMOTIONS = [
     'fear', 'anger', 'anticipation', 'trust',
     'surprise', 'sadness', 'disgust', 'joy'
@@ -28,7 +26,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Set styling for high-quality figures
 plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
 sns.set_theme(style="whitegrid")
 plt.rcParams.update({
@@ -40,7 +37,6 @@ plt.rcParams.update({
     'figure.titlesize': 16
 })
 
-# US Open 2025 key match dates, used to annotate sentiment timelines.
 US_OPEN_EVENTS = [
     ("2025-08-24", "US Open begins", "grey"),
     ("2025-08-25", "Alcaraz R1", "blue"),
@@ -53,7 +49,7 @@ US_OPEN_EVENTS = [
     ("2025-09-07", "Final\n(Alcaraz wins)", "darkred"),
 ]
 
-# US Open 2025 round windows, used to group median sentiment per round.
+
 US_OPEN_ROUNDS = [
     {"label": "Pre-Tournament", "start": "2025-08-21", "end": "2025-08-23"},
     {"label": "US Open begins",  "start": "2025-08-24", "end": "2025-08-24"},
@@ -69,10 +65,6 @@ US_OPEN_ROUNDS = [
 
 
 def parse_list_col(val: Any) -> list:
-    """Parse a column value stored as a string-encoded list back into a Python list.
-
-    Returns an empty list for missing values or anything that cannot be parsed.
-    """
     if isinstance(val, list):
         return val
     if pd.isna(val):
@@ -87,7 +79,6 @@ def parse_list_col(val: Any) -> list:
 
 
 def build_did_to_handle(df: pd.DataFrame) -> dict[str, str]:
-    """Build a mapping from author DID to author handle using the posts DataFrame."""
     did_to_handle: dict[str, str] = {}
     for did, handle in zip(df['author_did'], df['author_handle']):
         if pd.notna(did) and pd.notna(handle):
@@ -96,7 +87,6 @@ def build_did_to_handle(df: pd.DataFrame) -> dict[str, str]:
 
 
 def save_plot_copies(filename: str, output_dir: str = "plots") -> None:
-    """Save the current Matplotlib figure to output_dir and to the mirrored report directory."""
     os.makedirs(output_dir, exist_ok=True)
     plt.savefig(os.path.join(output_dir, filename), dpi=300, bbox_inches='tight')
 
@@ -118,7 +108,6 @@ def render_flat_chart(
     title_weight: str = "normal",
     title_pad: int = 15,
 ) -> None:
-    """Unified helper for flat matplotlib/seaborn plots to apply styling, labels, layout, save, and close."""
     if title:
         plt.title(title, fontsize=14, pad=title_pad, weight=title_weight)
     if xlabel:
@@ -137,7 +126,6 @@ _sentiment_clf_roberta = None
 
 
 def get_sentiment_clf_roberta():
-    """Lazily load and cache CardiffNLP RoBERTa sentiment analysis pipeline."""
     global _sentiment_clf_roberta
     if _sentiment_clf_roberta is None:
         device = 0 if torch.cuda.is_available() else -1
@@ -152,7 +140,6 @@ def get_sentiment_clf_roberta():
 
 
 def score_roberta_sentiment(text_or_list: Union[str, list[str]], batch_size: int = 128) -> list[dict]:
-    """Compute CardiffNLP sentiment labels and compound scores (P(positive) - P(negative)) for text inputs."""
     clf = get_sentiment_clf_roberta()
     if isinstance(text_or_list, str):
         inputs = [text_or_list]
@@ -187,7 +174,6 @@ def score_roberta_sentiment(text_or_list: Union[str, list[str]], batch_size: int
 
 
 def detect_player_mentions(text: Optional[str], linked_entities: list) -> tuple[bool, bool]:
-    """Detect Sinner and Alcaraz mentions from linked DBpedia URIs and raw text keywords."""
     uris = set()
     if isinstance(linked_entities, list):
         for ent in linked_entities:

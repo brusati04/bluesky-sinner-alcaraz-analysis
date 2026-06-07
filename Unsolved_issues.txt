@@ -1,0 +1,19 @@
+This is a list of issues found while working on this project. These issues are not addressed and are ground for future improvement.
+Match-related noise:
+- Crawling data during an important match introduces excessive news and neutral comments.
+- A proposed improvement is to change the crawling dates to a period outside major matches to reduce this noise.
+
+Foreign language text:
+- Comments in other languages (e.g., Spanish) pose a challenge for analysis.
+- Suggested solutions: translate foreign comments into English or use a multi‑lingual model.
+
+Missing nested comments/replies:
+- The current crawl only captures posts and comments that directly mention Sinner or Alcaraz, but not the replies to those comments.
+- This misses relevant conversational context.
+
+Sarcasm:
+- Sarcastic comments are difficult to detect and correctly interpret for stance detection.
+
+Heuristic stance formula:
+- The stance classification is based on a heuristic (rule‑based) approach, which may not be robust or accurate enough.
+- This is acknowledged as a limitation of the current methodology
