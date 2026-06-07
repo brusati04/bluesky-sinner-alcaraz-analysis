@@ -143,6 +143,18 @@ truth for all downstream stages. The enrichment (\texttt{src/preprocessing.py}) 
     \item \textbf{Post- and user-level stance} (see Section~\ref{sec:stancemethod}).
 \end{itemize}
 
+\paragraph{Community vocabulary.}
+A word cloud over the whole community (Figure~\ref{fig:wordcloud}) is dominated by the players'
+names and tournament/tennis vocabulary, confirming that the crawl captured on-topic discourse.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{community_wordcloud.png}
+\caption{Word cloud of the community corpus---player names and US~Open/tennis vocabulary
+dominate.}
+\label{fig:wordcloud}
+\end{figure}
+
 \bigskip
 
 \section{Methodology}
@@ -363,18 +375,6 @@ mentions alone.
 \caption{Fanbase classification: frequency-only baseline vs.\ sentiment-aware refinement.
 Sentiment reclassifies borderline users, shrinking the Sinner camp and growing the neutral pool.}
 \label{fig:fanbasecmp}
-\end{figure}
-
-\paragraph{Community vocabulary.}
-A word cloud over the whole community (Figure~\ref{fig:wordcloud}) is dominated by the players'
-names and tournament/tennis vocabulary, confirming that the crawl captured on-topic discourse.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.8\textwidth]{community_wordcloud.png}
-\caption{Word cloud of the community corpus---player names and US~Open/tennis vocabulary
-dominate.}
-\label{fig:wordcloud}
 \end{figure}
 
 \bigskip
