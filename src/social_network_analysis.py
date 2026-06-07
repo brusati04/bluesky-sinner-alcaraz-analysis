@@ -150,6 +150,19 @@ def run_community_detection(Gu: nx.Graph, Gd: nx.DiGraph) -> dict:
     gcc_size = gcc.number_of_nodes()
     gcc_fraction = gcc_size / Gu.number_of_nodes()
 
+    # Directed metrics
+    density_dir = nx.density(Gd)
+    transitivity_dir = nx.transitivity(Gd)
+    avg_clustering_dir = nx.average_clustering(Gd)
+
+    wcc_dir = sorted(nx.weakly_connected_components(Gd), key=len, reverse=True)
+    wcc_size_dir = len(wcc_dir[0]) if wcc_dir else 0
+    wcc_fraction_dir = wcc_size_dir / len(Gd.nodes()) if Gd.nodes() else 0
+
+    scc_dir = sorted(nx.strongly_connected_components(Gd), key=len, reverse=True)
+    scc_size_dir = len(scc_dir[0]) if scc_dir else 0
+    scc_fraction_dir = scc_size_dir / len(Gd.nodes()) if Gd.nodes() else 0
+
     gcc_avg_path_length = gcc_diameter = gcc_radius = min_ecc = max_ecc = 0.0
     if gcc_size > 1:
         try: gcc_avg_path_length = nx.average_shortest_path_length(gcc)
@@ -165,16 +178,47 @@ def run_community_detection(Gu: nx.Graph, Gd: nx.DiGraph) -> dict:
     print("\n" + "=" * 50)
     print("GLOBAL SOCIAL NETWORK STATISTICS")
     print("=" * 50)
-    print(f"Network Density:                    {density:.6f}")
-    print(f"Louvain Communities:                {len(communities)} (Modularity Q: {modularity_score:.4f})")
-    print(f"Infomap Communities:                {len(infomap_communities)} (Modularity Q: {infomap_modularity:.4f})")
+    print(f"Network Density (Undir/Dir):        {density:.6f} / {density_dir:.6f}")
+    print(f"Louvain Communities (Undir):        {len(communities)} (Modularity Q: {modularity_score:.4f})")
+    print(f"Infomap Communities (Dir):          {len(infomap_communities)} (Modularity Q: {infomap_modularity:.4f})")
     print("=" * 50)
 
     try:
         os.makedirs("data", exist_ok=True)
         stats_df = pd.DataFrame({
-            "Metric": ["Density", "Transitivity", "Average Clustering", "GCC Size", "GCC Fraction", "Louvain Modularity", "Infomap Modularity"],
-            "Value": [density, transitivity, avg_clustering, gcc_size, gcc_fraction, modularity_score, infomap_modularity],
+            "Metric": [
+                "Density", 
+                "Transitivity", 
+                "Average Clustering", 
+                "WCC Size", 
+                "WCC Fraction", 
+                "SCC Size", 
+                "SCC Fraction", 
+                "Louvain Modularity", 
+                "Infomap Modularity"
+            ],
+            "Undirected": [
+                density, 
+                transitivity, 
+                avg_clustering, 
+                gcc_size, 
+                gcc_fraction, 
+                None, 
+                None, 
+                modularity_score, 
+                None
+            ],
+            "Directed": [
+                density_dir, 
+                transitivity_dir, 
+                avg_clustering_dir, 
+                wcc_size_dir, 
+                wcc_fraction_dir, 
+                scc_size_dir, 
+                scc_fraction_dir, 
+                None, 
+                infomap_modularity
+            ]
         })
         stats_df.to_csv("data/network_global_metrics.csv", index=False)
     except Exception as e:
