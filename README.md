@@ -10,6 +10,14 @@ emotion and stance signals, builds reply/mention interaction graphs, detects com
 and renders various visualisations covering network structure, emotional tone, and fanbase
 polarisation.
 
+<p align="center">
+  <img src="plots/filtered/network_graph_fanbase.png" alt="Interaction network coloured by fanbase" width="48%">
+  <img src="plots/sentiment_over_time.png" alt="Sentiment over the tournament" width="48%">
+</p>
+
+Project by **Lorenzo Brusati**, **Lorenzo Cinquemani** and **Lorenzo Goatelli** (University of Pavia, 2026).
+📄 [Read the full report (PDF)](report/report.pdf)
+
 ## Key findings
 
 Computed on the crawled dataset of **9,078 posts**:
@@ -22,9 +30,12 @@ Computed on the crawled dataset of **9,078 posts**:
 - **Sentiment tracks match outcomes.** The sentiment time series reacts to key matches,
   with each fanbase diverging after wins and losses (notably the final).
 - **Sentiment-aware stance beats frequency baselines.** Fusing RoBERTa sentiment with
-  mention frequency reclassifies users by their stance (Sinner/Alcaraz/Neutral) against a simple raw count of mentions-.
+  mention frequency reclassifies users by stance (Sinner / Alcaraz / Neutral) differently
+  from a simple raw count of mentions.
 
-> A full write-up with methodology and discussion is in [`report/report.tex`](report/report.tex).
+> Full methodology and discussion: [`report/report.pdf`](report/report.pdf) (LaTeX source in
+> [`report/report.tex`](report/report.tex)). Known limitations are listed in
+> [`docs/known_limitations.txt`](docs/known_limitations.txt).
 
 ## Pipeline architecture
 
@@ -162,7 +173,8 @@ python main.py
 │   └── utils.py                     # Shared constants & helpers
 ├── data/                            # Raw, processed & metrics CSVs
 ├── plots/                           # Generated visualisations
-└── report/                          # LaTeX report + figures
+├── report/                          # LaTeX report + figures
+└── docs/                            # known limitations and resolved issues
 ```
 
 ## Tech stack
@@ -173,7 +185,7 @@ python main.py
 
 ## Reproducibility
 
-Random seeds are fixed (`random.seed(42)`, `np.random.seed(42)`) and the DAG design allow any downstream stage to be re-run
+Random seeds are fixed (`random.seed(42)`, `np.random.seed(42)`) and the DAG design allows any downstream stage to be re-run independently.
 
 ## License
 
