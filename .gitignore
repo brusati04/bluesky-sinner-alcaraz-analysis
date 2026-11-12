@@ -190,3 +190,15 @@ lab/
 _baseline/
 _rerun_original/
 _baseline_checksums.txt
+
+# macOS
+.DS_Store
+
+# LaTeX build artifacts
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
